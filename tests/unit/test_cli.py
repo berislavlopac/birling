@@ -38,7 +38,7 @@ def test_main_prints_the_report_of_the_paths_given(project, capsys):
     assert capsys.readouterr().out == dedent("""\
         Name            Branches  Logged  Score  Unlogged
         -------------------------------------------------
-        app/service.py         2       1    50%  11
+        app/service.py         2       1    50%  10
         -------------------------------------------------
         TOTAL                  2       1    50%
     """)
@@ -138,7 +138,7 @@ def test_main_marks_the_unlogged_branches_that_ran_from_the_coverage_data(
     assert capsys.readouterr().out == dedent("""\
         Name            Branches  Logged  Score  Unlogged
         -------------------------------------------------
-        app/service.py         2       1    50%  11*
+        app/service.py         2       1    50%  10*
         -------------------------------------------------
         TOTAL                  2       1    50%
 

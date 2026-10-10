@@ -1,4 +1,3 @@
-import ast
 from textwrap import dedent, indent
 
 import pytest
@@ -26,9 +25,8 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
                 raise
             return result
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config())
+    units = collect_units(source, Config())
 
     assert units == (
         Unit(
@@ -37,21 +35,24 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
             branches=(
                 Branch(
                     kind=BranchKind.IF,
-                    line=7,
+                    line=6,
+                    body_line=7,
                     condition="not request",
                     always_raises=False,
                     log_calls=(LogCall(line=7, level="warning"),),
                 ),
                 Branch(
                     kind=BranchKind.EXCEPT,
-                    line=12,
+                    line=11,
+                    body_line=12,
                     condition="TimeoutError",
                     always_raises=False,
                     log_calls=(),
                 ),
                 Branch(
                     kind=BranchKind.EXCEPT,
-                    line=14,
+                    line=13,
+                    body_line=14,
                     condition="ValueError",
                     always_raises=True,
                     log_calls=(LogCall(line=14, level="exception"),),
@@ -80,9 +81,9 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
     ids=["if", "else", "except", "except*", "try-else", "case", "for-else", "while-else"],
 )
 def test_collect_units_finds_each_kind_of_branch(body, kinds):
-    module = ast.parse("def run():\n" + indent(body, "    "))
+    source = "def run():\n" + indent(body, "    ")
 
-    [run] = collect_units(module, Config())
+    [run] = collect_units(source, Config())
 
     assert [branch.kind for branch in run.branches] == kinds
 
@@ -99,9 +100,9 @@ def test_collect_units_finds_each_kind_of_branch(body, kinds):
     ids=["loop", "while", "with", "finally", "conditional expression"],
 )
 def test_collect_units_finds_no_branch_in_a_block_that_always_runs_or_an_expression(body):
-    module = ast.parse("def run():\n" + indent(body, "    "))
+    source = "def run():\n" + indent(body, "    ")
 
-    [run] = collect_units(module, Config())
+    [run] = collect_units(source, Config())
 
     assert run.branches == ()
 
@@ -142,7 +143,7 @@ def test_a_branch_always_raises_when_every_path_through_it_does(handler, always_
 
     The handler's own branch comes first, before any branch nested in it.
     """
-    module = ast.parse(
+    source = (
         "def run(items):\n"
         "    for item in items:\n"
         "        try:\n"
@@ -150,7 +151,7 @@ def test_a_branch_always_raises_when_every_path_through_it_does(handler, always_
         "        except OSError as error:\n" + indent(handler, " " * 12)
     )
 
-    run, *_nested = collect_units(module, Config())
+    run, *_nested = collect_units(source, Config())
 
     handler_branch = run.branches[0]
     assert handler_branch.always_raises is always_raises
@@ -168,22 +169,49 @@ def test_an_elif_is_an_if_branch_and_an_if_in_an_else_is_both():
                     return 3
                 return 4
     """)
-    module = ast.parse(source)
 
-    [check] = collect_units(module, Config())
+    [check] = collect_units(source, Config())
 
-    assert check.branches == (
-        Branch(
-            BranchKind.IF, line=4, condition="value == 1", always_raises=False, log_calls=()
-        ),
-        Branch(
-            BranchKind.IF, line=6, condition="value == 2", always_raises=False, log_calls=()
-        ),
-        Branch(BranchKind.ELSE, line=8, condition="", always_raises=False, log_calls=()),
-        Branch(
-            BranchKind.IF, line=9, condition="value == 3", always_raises=False, log_calls=()
-        ),
-    )
+    assert [(b.kind, b.line, b.body_line, b.condition) for b in check.branches] == [
+        (BranchKind.IF, 3, 4, "value == 1"),
+        (BranchKind.IF, 5, 6, "value == 2"),
+        (BranchKind.ELSE, 7, 8, ""),
+        (BranchKind.IF, 8, 9, "value == 3"),
+    ]
+
+
+def test_a_branch_opens_on_its_if_case_except_or_else_line():
+    """The `else:` line comes from the tokens; the `else` of an expression is not one."""
+    source = dedent("""
+        def run(items, value):
+            for item in items:
+                start(item)
+            else:
+
+                # nothing was found
+                stop(item if item else value)
+            try:
+                return items[0]
+            except (
+                IndexError
+            ):
+                return None
+            else: done()
+            match value:
+                case (
+                    1
+                ):
+                    pass
+    """)
+
+    [run] = collect_units(source, Config())
+
+    assert [(b.kind, b.line, b.body_line) for b in run.branches] == [
+        (BranchKind.LOOP_ELSE, 5, 8),
+        (BranchKind.EXCEPT, 11, 14),
+        (BranchKind.TRY_ELSE, 15, 15),
+        (BranchKind.CASE, 18, 20),
+    ]
 
 
 def test_a_case_is_selected_by_its_pattern_and_guard():
@@ -195,9 +223,8 @@ def test_a_case_is_selected_by_its_pattern_and_guard():
                 case _:
                     return None
     """)
-    module = ast.parse(source)
 
-    [check] = collect_units(module, Config())
+    [check] = collect_units(source, Config())
 
     assert [branch.condition for branch in check.branches] == ["[first, *_] if first", "_"]
 
@@ -210,9 +237,8 @@ def test_a_bare_handler_has_no_condition():
             except:
                 return None
     """)
-    module = ast.parse(source)
 
-    [load] = collect_units(module, Config())
+    [load] = collect_units(source, Config())
 
     assert [branch.condition for branch in load.branches] == [""]
 
@@ -229,14 +255,13 @@ def test_branches_are_listed_in_the_order_of_their_lines():
             except ValueError:
                 return None
     """)
-    module = ast.parse(source)
 
-    [load] = collect_units(module, Config())
+    [load] = collect_units(source, Config())
 
     assert [(branch.kind, branch.line) for branch in load.branches] == [
-        (BranchKind.EXCEPT, 6),
-        (BranchKind.IF, 7),
-        (BranchKind.EXCEPT, 10),
+        (BranchKind.EXCEPT, 5),
+        (BranchKind.IF, 6),
+        (BranchKind.EXCEPT, 9),
     ]
 
 
@@ -252,9 +277,8 @@ def test_a_log_call_in_a_nested_statement_belongs_to_the_branch():
                     logging.warning("cannot read %s", path)
                 return None
     """)
-    module = ast.parse(source)
 
-    [load] = collect_units(module, Config())
+    [load] = collect_units(source, Config())
 
     assert [branch.log_calls for branch in load.branches] == [
         (LogCall(line=9, level="warning"),),
@@ -274,9 +298,8 @@ def test_a_log_call_in_a_lambda_belongs_to_neither_branch_nor_unit_by_default():
                 on_error(lambda: logging.warning("cannot read %s", path))
                 return None
     """)
-    module = ast.parse(source)
 
-    [load] = collect_units(module, Config())
+    [load] = collect_units(source, Config())
 
     assert ([branch.log_calls for branch in load.branches], load.log_calls) == ([()], ())
 
@@ -292,9 +315,8 @@ def test_a_log_call_in_a_lambda_belongs_to_its_branch_and_unit_when_configured()
                 on_error(lambda: logging.warning("cannot read %s", path))
                 return None
     """)
-    module = ast.parse(source)
 
-    [load] = collect_units(module, Config(lambdas=True))
+    [load] = collect_units(source, Config(lambdas=True))
 
     warning = LogCall(line=8, level="warning")
     assert ([branch.log_calls for branch in load.branches], load.log_calls) == (
@@ -316,9 +338,8 @@ def test_a_nested_function_is_a_unit_of_its_own_and_sees_the_loggers_around_it()
             events.info("outer")
             return inner
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config(name_fallback=False))
+    units = collect_units(source, Config(name_fallback=False))
 
     assert [(unit.name, unit.log_calls) for unit in units] == [
         ("outer", (LogCall(line=10, level="info"),)),
@@ -341,9 +362,8 @@ def test_methods_are_named_after_their_class_and_share_its_logger_attributes():
                 async def start(self):
                     pass
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config(name_fallback=False))
+    units = collect_units(source, Config(name_fallback=False))
 
     assert [(unit.name, unit.log_calls) for unit in units] == [
         ("Service.__init__", ()),
@@ -363,9 +383,8 @@ def test_functions_defined_under_a_module_level_statement_are_units():
             def run():
                 pass
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config())
+    units = collect_units(source, Config())
 
     assert [(unit.name, unit.line) for unit in units] == [("run", 5), ("run", 8)]
 
@@ -377,9 +396,8 @@ def test_module_level_code_is_not_part_of_a_unit_by_default():
         except ImportError:
             import json
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config())
+    units = collect_units(source, Config())
 
     assert units == ()
 
@@ -399,9 +417,8 @@ def test_module_level_code_is_a_unit_of_its_own_when_configured():
             if path:
                 return json.loads(read(path))
     """)
-    module = ast.parse(source)
 
-    units = collect_units(module, Config(module_level=True))
+    units = collect_units(source, Config(module_level=True))
 
     assert [unit.name for unit in units] == [MODULE_UNIT_NAME, "load"]
     assert units[0] == Unit(
@@ -410,7 +427,8 @@ def test_module_level_code_is_a_unit_of_its_own_when_configured():
         branches=(
             Branch(
                 kind=BranchKind.EXCEPT,
-                line=8,
+                line=7,
+                body_line=8,
                 condition="ImportError",
                 always_raises=False,
                 log_calls=(LogCall(line=8, level="info"),),
@@ -423,7 +441,8 @@ def test_module_level_code_is_a_unit_of_its_own_when_configured():
 def test_a_branch_is_logged_when_it_holds_a_log_call():
     logged = Branch(
         kind=BranchKind.EXCEPT,
-        line=12,
+        line=11,
+        body_line=12,
         condition="OSError",
         always_raises=False,
         log_calls=(LogCall(line=12, level="warning"),),
@@ -437,7 +456,8 @@ def test_a_branch_is_logged_when_it_holds_a_log_call():
 def test_a_branch_is_not_logged_without_a_log_call():
     unlogged = Branch(
         kind=BranchKind.EXCEPT,
-        line=12,
+        line=11,
+        body_line=12,
         condition="OSError",
         always_raises=False,
         log_calls=(),

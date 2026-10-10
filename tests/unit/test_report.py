@@ -40,7 +40,7 @@ def test_to_text_lists_each_module_with_branches_that_should_log_and_the_total()
     assert text == dedent("""\
         Name                Branches  Logged  Score  Unlogged
         -----------------------------------------------------
-        app/service.py             3       1    33%  11, 13
+        app/service.py             3       1    33%  10, 12
         app/jobs/worker.py         1       1   100%
         -----------------------------------------------------
         TOTAL                      4       2    50%
@@ -99,7 +99,7 @@ def test_to_text_marks_the_unlogged_branches_that_ran_in_the_tests():
     assert text == dedent("""\
         Name            Branches  Logged  Score  Unlogged
         -------------------------------------------------
-        app/service.py         2       0     0%  6*, 8
+        app/service.py         2       0     0%  5*, 7
         -------------------------------------------------
         TOTAL                  2       0     0%
 

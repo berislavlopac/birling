@@ -2,7 +2,7 @@
 
 import ast
 from collections.abc import Iterable, Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from itertools import chain
 
 from birling.config import BranchKind, Config
@@ -13,9 +13,13 @@ from birling.recognition import (
     find_module_scope,
     recognise,
 )
+from birling.syntax import Layout, parse, to_layout
 
 MODULE_UNIT_NAME = "<module>"
 """The name of the unit that holds a module's own code, as Python names its code object."""
+
+# The kinds of branch opened by an `else:`, whose line the syntax tree does not record.
+_ELSE_KINDS = frozenset({BranchKind.ELSE, BranchKind.TRY_ELSE, BranchKind.LOOP_ELSE})
 
 
 @dataclass(frozen=True)
@@ -26,7 +30,10 @@ class Branch:
     """The construct the branch belongs to."""
 
     line: int
-    """The line of the branch's first statement."""
+    """The line that opens the branch: its `if`, `elif`, `else`, `case` or `except`."""
+
+    body_line: int
+    """The line of the branch's first statement, the one a coverage tool records as run."""
 
     condition: str
     """The source of what selects the branch: a condition, exception types or a pattern.
@@ -69,25 +76,49 @@ class Unit:
     """
 
 
-def collect_units(module: ast.Module, config: Config) -> tuple[Unit, ...]:
+def collect_units(source: str, config: Config) -> tuple[Unit, ...]:
     """Return the functions and methods of a module, nested ones included.
 
     The module's own code, outside its functions and classes, is a unit named `<module>`
     when the configuration says so.
 
     Args:
-        module: The module's syntax tree.
+        source: The module's source.
         config: What counts as a log call, and whether module-level code counts.
 
     Returns:
         The units, each one before those nested in it.
     """
+    module = parse(source)
     scope = find_module_scope(module, config)
     scan = _scan(module.body, config)
     units = _collect(scan.definitions, "", scope, config)
     if config.module_level:
         units = chain([_to_unit(MODULE_UNIT_NAME, 1, scan, scope, config)], units)
-    return tuple(units)
+    layout = to_layout(source)
+    return tuple(_place_branches(unit, layout) for unit in units)
+
+
+def _place_branches(unit: Unit, layout: Layout) -> Unit:
+    """Move a unit's `else` branches to their `else:` line, and order its branches by line.
+
+    The walk places an `else` branch at its first statement, since only the tokens show
+    the line of the `else:` itself.
+
+    Args:
+        unit: The unit as the walk built it.
+        layout: The layout of the module's lines.
+
+    Returns:
+        The unit, with its branches at their opening lines, in order.
+    """
+    branches = (
+        replace(branch, line=layout.find_else_line(branch.body_line))
+        if branch.kind in _ELSE_KINDS
+        else branch
+        for branch in unit.branches
+    )
+    return replace(unit, branches=tuple(sorted(branches, key=lambda branch: branch.line)))
 
 
 _Definition = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
@@ -98,7 +129,8 @@ class _Scan:
     """What a single walk finds in a unit's own code, before any call is recognised."""
 
     assignments: list[ast.Assign | ast.AnnAssign] = field(default_factory=list)
-    branches: list[tuple[BranchKind, str, list[ast.stmt]]] = field(default_factory=list)
+    branches: list[tuple[BranchKind, int, str, list[ast.stmt]]] = field(default_factory=list)
+    """Each branch's kind, opening line, condition and body."""
     calls: list[tuple[ast.Call, tuple[int, ...]]] = field(default_factory=list)
     """Each call with the indices of the branches it is in."""
     definitions: list[_Definition] = field(default_factory=list)
@@ -136,9 +168,9 @@ def _scan(statements: list[ast.stmt], config: Config) -> _Scan:
                 scan.calls.append((node, enclosing))
             case ast.Assign() | ast.AnnAssign():
                 scan.assignments.append(node)
-        for kind, condition, body in _to_branches(node):
+        for kind, line, condition, body in _to_branches(node):
             branch_of.update((id(statement), len(scan.branches)) for statement in body)
-            scan.branches.append((kind, condition, body))
+            scan.branches.append((kind, line, condition, body))
         children = reversed(list(ast.iter_child_nodes(node)))
         stack.extend((child, enclosing) for child in children)
     return scan
@@ -240,7 +272,7 @@ def _to_unit(name: str, line: int, scan: _Scan, scope: LoggerScope, config: Conf
         config: What counts as a log call.
 
     Returns:
-        The unit, with its branches in the order of their lines.
+        The unit, with its branches in the order the walk found them.
     """
     calls = [
         (log_call, within)
@@ -250,53 +282,57 @@ def _to_unit(name: str, line: int, scan: _Scan, scope: LoggerScope, config: Conf
     branches = (
         Branch(
             kind=kind,
-            line=body[0].lineno,
+            line=opening,
+            body_line=body[0].lineno,
             condition=condition,
             always_raises=_always_raises(body),
             log_calls=tuple(log_call for log_call, within in calls if index in within),
         )
-        for index, (kind, condition, body) in enumerate(scan.branches)
+        for index, (kind, opening, condition, body) in enumerate(scan.branches)
     )
     return Unit(
         name=name,
         line=line,
-        branches=tuple(sorted(branches, key=lambda branch: branch.line)),
+        branches=tuple(branches),
         log_calls=tuple(log_call for log_call, _ in calls),
     )
 
 
-def _to_branches(node: ast.AST) -> Iterator[tuple[BranchKind, str, list[ast.stmt]]]:
+def _to_branches(node: ast.AST) -> Iterator[tuple[BranchKind, int, str, list[ast.stmt]]]:
     """Yield the branches a node opens, without looking into its children.
+
+    An `else` branch is placed at its first statement, since the syntax tree does not
+    record the line of the `else:`.
 
     Args:
         node: Any node.
 
     Yields:
-        Each branch's kind, condition and body.
+        Each branch's kind, opening line, condition and body.
     """
     match node:
         case ast.If(test=test, body=body, orelse=orelse):
-            yield BranchKind.IF, ast.unparse(test), body
+            yield BranchKind.IF, node.lineno, ast.unparse(test), body
             if orelse and not _is_elif(node):
-                yield BranchKind.ELSE, "", orelse
+                yield BranchKind.ELSE, orelse[0].lineno, "", orelse
         case (
             ast.Try(handlers=handlers, orelse=orelse)
             | ast.TryStar(handlers=handlers, orelse=orelse)
         ):
             for handler in handlers:
                 caught = ast.unparse(handler.type) if handler.type else ""
-                yield BranchKind.EXCEPT, caught, handler.body
+                yield BranchKind.EXCEPT, handler.lineno, caught, handler.body
             if orelse:
-                yield BranchKind.TRY_ELSE, "", orelse
+                yield BranchKind.TRY_ELSE, orelse[0].lineno, "", orelse
         case (
             ast.For(orelse=orelse) | ast.AsyncFor(orelse=orelse) | ast.While(orelse=orelse)
         ) if orelse:
-            yield BranchKind.LOOP_ELSE, "", orelse
+            yield BranchKind.LOOP_ELSE, orelse[0].lineno, "", orelse
         case ast.Match(cases=cases):
             for case in cases:
                 pattern = ast.unparse(case.pattern)
                 guard = f" if {ast.unparse(case.guard)}" if case.guard else ""
-                yield BranchKind.CASE, f"{pattern}{guard}", case.body
+                yield BranchKind.CASE, case.pattern.lineno, f"{pattern}{guard}", case.body
 
 
 def _is_elif(node: ast.If) -> bool:

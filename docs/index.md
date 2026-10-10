@@ -28,8 +28,8 @@ Point the `birling` command at the project's code:
 $ birling shop
 Name              Branches  Logged  Score  Unlogged
 ---------------------------------------------------
-shop/orders.py           2       1    50%  13
-shop/payments.py         2       1    50%  13
+shop/orders.py           2       1    50%  12
+shop/payments.py         2       1    50%  12
 ---------------------------------------------------
 TOTAL                    4       2    50%
 ```

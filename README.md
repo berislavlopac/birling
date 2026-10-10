@@ -8,8 +8,8 @@ A handled exception that leaves no log is a failure nobody hears about. birling 
 $ birling shop
 Name              Branches  Logged  Score  Unlogged
 ---------------------------------------------------
-shop/orders.py           2       1    50%  13
-shop/payments.py         2       1    50%  13
+shop/orders.py           2       1    50%  12
+shop/payments.py         2       1    50%  12
 ---------------------------------------------------
 TOTAL                    4       2    50%
 ```

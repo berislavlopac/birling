@@ -35,21 +35,24 @@ def test_measure_source_keeps_the_branches_that_should_log_for_each_unit():
     """)
     timeout = Branch(
         kind=BranchKind.EXCEPT,
-        line=9,
+        line=8,
+        body_line=9,
         condition="TimeoutError",
         always_raises=False,
         log_calls=(),
     )
     connection = Branch(
         kind=BranchKind.EXCEPT,
-        line=11,
+        line=10,
+        body_line=11,
         condition="ConnectionError",
         always_raises=False,
         log_calls=(LogCall(line=11, level="warning"),),
     )
     value = Branch(
         kind=BranchKind.EXCEPT,
-        line=14,
+        line=13,
+        body_line=14,
         condition="ValueError",
         always_raises=True,
         log_calls=(),
@@ -212,14 +215,16 @@ def test_the_score_is_full_when_no_branch_should_log():
 def test_a_unit_measurement_lists_the_branches_that_should_log_but_do_not():
     unlogged = Branch(
         kind=BranchKind.EXCEPT,
-        line=4,
+        line=3,
+        body_line=4,
         condition="TimeoutError",
         always_raises=False,
         log_calls=(),
     )
     logged = Branch(
         kind=BranchKind.EXCEPT,
-        line=6,
+        line=5,
+        body_line=6,
         condition="ConnectionError",
         always_raises=False,
         log_calls=(LogCall(line=6, level="warning"),),
@@ -339,8 +344,9 @@ def test_measure_paths_uses_the_configuration_given(write_project):
     [
         (b"def broken(:\n", "invalid syntax at line 1"),
         (b"import json\n\nname = '\xe9'\n", "not valid utf-8: invalid continuation byte"),
+        (b"# -*- coding: klingon -*-\nname = 1\n", "unknown encoding: klingon"),
     ],
-    ids=["invalid syntax", "undecodable bytes"],
+    ids=["invalid syntax", "undecodable bytes", "unknown encoding"],
 )
 def test_measure_paths_names_a_module_it_cannot_read_and_why(write_project, content, problem):
     root = write_project({"app/service.py": ""})

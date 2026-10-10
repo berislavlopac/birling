@@ -1,12 +1,20 @@
 import ast
 import keyword
 from textwrap import dedent
+import warnings
 
 from hypothesis import given
 from hypothesis import strategies as st
 import pytest
 
-from birling.syntax import NESTED_SCOPES, to_dotted_name, walk_scope
+from birling.syntax import (
+    NESTED_SCOPES,
+    Layout,
+    parse,
+    to_dotted_name,
+    to_layout,
+    walk_scope,
+)
 
 identifiers = st.from_regex(r"[A-Za-z_][A-Za-z0-9_]*", fullmatch=True).filter(
     lambda name: not keyword.iskeyword(name)
@@ -85,3 +93,40 @@ def test_to_dotted_name_returns_none_for_any_other_expression(expression):
     dotted_name = to_dotted_name(node)
 
     assert dotted_name is None
+
+
+def test_parse_returns_the_syntax_tree_without_showing_warnings():
+    """A warning such as an invalid escape is for the parsed code's own tools."""
+    source = 'pattern = "\\d+"\n'
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        module = parse(source)
+
+    [assignment] = module.body
+    assert assignment.value.value == "\\d+"
+
+
+def test_to_layout_finds_the_else_that_opens_a_block():
+    """An `else` followed by a colon opens a block; that of a conditional expression does not."""
+    source = dedent("""
+        if ready:
+            value = start() if ready else stop()
+        else:
+            value = None
+        for item in items:
+            pass
+        else: done()
+    """)
+
+    layout = to_layout(source)
+
+    assert layout == Layout(else_lines=(4, 8))
+
+
+def test_a_layout_finds_the_else_that_opens_the_block_starting_on_a_line():
+    layout = Layout(else_lines=(4, 8))
+
+    else_line = layout.find_else_line(6)
+
+    assert else_line == 4

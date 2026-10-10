@@ -22,8 +22,8 @@ A directory is searched for `.py` files, skipping hidden directories and virtual
 ```text
 Name              Branches  Logged  Score  Unlogged
 ---------------------------------------------------
-shop/orders.py           2       1    50%  13
-shop/payments.py         2       1    50%  13
+shop/orders.py           2       1    50%  12
+shop/payments.py         2       1    50%  12
 ---------------------------------------------------
 TOTAL                    4       2    50%
 ```
@@ -33,7 +33,7 @@ TOTAL                    4       2    50%
 | Branches | The branches that should log. |
 | Logged | Those of them that hold a log call. |
 | Score | The percentage of them that do, rounded down, so 100% means every one does. A module with no branch that should log scores 100%. |
-| Unlogged | The line of the first statement of each branch that should log but does not. |
+| Unlogged | The line that opens each branch that should log but does not: its `except`, `if`, `elif`, `else` or `case`. |
 
 Only modules with at least one branch that should log get a row. The score depends on the code alone, so it is the same on every run.
 
@@ -56,8 +56,8 @@ $ coverage run --source=shop -m pytest
 $ birling shop --coverage-file .coverage
 Name              Branches  Logged  Score  Unlogged
 ---------------------------------------------------
-shop/orders.py           2       1    50%  13*
-shop/payments.py         2       1    50%  13
+shop/orders.py           2       1    50%  12*
+shop/payments.py         2       1    50%  12
 ---------------------------------------------------
 TOTAL                    4       2    50%
 

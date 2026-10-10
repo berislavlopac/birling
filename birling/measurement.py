@@ -1,12 +1,11 @@
 """Measuring how well the branches that should log are covered by log calls."""
 
-import ast
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
+import io
 from pathlib import Path
 import tokenize
 from typing import Self
-import warnings
 
 from birling.analysis import Branch, Unit, collect_units
 from birling.config import Config
@@ -91,7 +90,7 @@ def measure_source(source: str, config: Config | None = None) -> Measurement:
     Returns:
         The measurement of every unit in the module.
     """
-    return _measure(_parse(source, "<unknown>"), config or Config())
+    return _measure(source, config or Config())
 
 
 def measure_paths(
@@ -123,37 +122,55 @@ def measure_paths(
             raise MeasurementError(failed, error.strerror or str(error)) from error
     measurements = {}
     for module in sorted(modules):
-        tree = _read_module(module)
+        source = _read_module(module)
         try:
-            measurements[module] = _measure(tree, config)
+            measurements[module] = _measure(source, config)
+        except SyntaxError as error:
+            raise MeasurementError(module, _to_problem(error)) from error
         except Exception as error:
             error.add_note(f"while measuring {module}")
             raise
     return measurements
 
 
-def _read_module(module: Path) -> ast.Module:
-    """Read and parse a module.
+def _read_module(module: Path) -> str:
+    """Read a module's source, in the encoding it declares.
 
     Args:
         module: The module's path.
 
     Returns:
-        The module's syntax tree.
+        The module's source.
 
     Raises:
-        MeasurementError: When the module cannot be read, decoded or parsed.
+        MeasurementError: When the module cannot be read, or its encoding declaration is
+            invalid, or it cannot be decoded.
     """
     try:
-        with tokenize.open(module) as file:
-            return _parse(file.read(), str(module))
+        content = module.read_bytes()
     except OSError as error:
         raise MeasurementError(module, error.strerror or str(error)) from error
+    try:
+        # Read from bytes, so that an error in the encoding declaration does not name the file.
+        encoding, _ = tokenize.detect_encoding(io.BytesIO(content).readline)
+        return content.decode(encoding)
+    except SyntaxError as error:
+        raise MeasurementError(module, error.msg) from error
     except UnicodeDecodeError as error:
         raise MeasurementError(module, f"not valid {error.encoding}: {error.reason}") from error
-    except SyntaxError as error:
-        line = f" at line {error.lineno}" if error.lineno else ""
-        raise MeasurementError(module, f"{error.msg}{line}") from error
+
+
+def _to_problem(error: SyntaxError) -> str:
+    """Describe a syntax error without the file's name.
+
+    Args:
+        error: The error.
+
+    Returns:
+        Its message, with its line when it has one.
+    """
+    line = f" at line {error.lineno}" if error.lineno else ""
+    return f"{error.msg}{line}"
 
 
 def _find_modules(path: Path) -> Iterator[Path]:
@@ -183,35 +200,17 @@ def _find_modules(path: Path) -> Iterator[Path]:
             yield child
 
 
-def _parse(source: str, filename: str) -> ast.Module:
-    """Parse a module's source without showing warnings.
-
-    A warning about the measured code, such as an invalid escape, is for its own tools,
-    whatever its category: the category of some warnings differs between Python versions.
+def _measure(source: str, config: Config) -> Measurement:
+    """Measure a module's source.
 
     Args:
         source: The module's source.
-        filename: The name a syntax error gives the module.
-
-    Returns:
-        The module's syntax tree.
-    """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        return ast.parse(source, filename)
-
-
-def _measure(module: ast.Module, config: Config) -> Measurement:
-    """Measure a parsed module.
-
-    Args:
-        module: The module's syntax tree.
         config: What counts as a log call and which branches should log.
 
     Returns:
         The measurement of every unit in the module.
     """
-    units = collect_units(module, config)
+    units = collect_units(source, config)
     return Measurement(
         tuple(
             UnitMeasurement(unit, tuple(b for b in unit.branches if _should_log(b, config)))

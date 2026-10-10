@@ -53,3 +53,9 @@
 ::: birling.syntax.walk_scope
 
 ::: birling.syntax.to_dotted_name
+
+::: birling.syntax.parse
+
+::: birling.syntax.to_layout
+
+::: birling.syntax.Layout

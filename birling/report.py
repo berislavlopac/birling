@@ -4,6 +4,7 @@ from collections.abc import Mapping
 import math
 from pathlib import Path
 
+from birling.analysis import Branch
 from birling.measurement import Measurement
 
 _HEADER = "Branches  Logged  Score  Unlogged"
@@ -38,7 +39,7 @@ def to_text(
     total = Measurement.combine(measurements.values())
     lines = [header, rule, *rows, *([rule] if rows else []), _to_row("TOTAL", total, width, "")]
     if executed is not None:
-        ran = sum(len(_find_unlogged(m) & ran) for _, m, ran in modules)
+        ran = sum(b.body_line in ran for _, m, ran in modules for b in _find_unlogged(m))
         unlogged = total.branch_count - total.logged_count
         lines += ["", f"* ran in the tests: {ran} of {unlogged} unlogged branches"]
     return "\n".join(line.rstrip() for line in lines) + "\n"
@@ -57,16 +58,17 @@ def _find_ran(path: Path, executed: Mapping[Path, frozenset[int]] | None) -> fro
     return frozenset() if executed is None else executed.get(path.resolve(), frozenset())
 
 
-def _find_unlogged(measurement: Measurement) -> frozenset[int]:
-    """Return the lines of a module's branches that should log but do not.
+def _find_unlogged(measurement: Measurement) -> list[Branch]:
+    """Return a module's branches that should log but do not.
 
     Args:
         measurement: The module's measurement.
 
     Returns:
-        The lines.
+        The branches, in the order of their lines.
     """
-    return frozenset(branch.line for unit in measurement.units for branch in unit.unlogged)
+    branches = (branch for unit in measurement.units for branch in unit.unlogged)
+    return sorted(branches, key=lambda branch: branch.line)
 
 
 def _to_row(name: str, measurement: Measurement, width: int, unlogged: str) -> str:
@@ -87,7 +89,9 @@ def _to_row(name: str, measurement: Measurement, width: int, unlogged: str) -> s
 
 
 def _to_lines(measurement: Measurement, ran: frozenset[int]) -> str:
-    """List the lines of a module's unlogged branches, marking those that ran with `*`.
+    """List the lines that open a module's unlogged branches, marking those that ran with `*`.
+
+    A branch ran when its first statement did.
 
     Args:
         measurement: The module's measurement.
@@ -96,5 +100,5 @@ def _to_lines(measurement: Measurement, ran: frozenset[int]) -> str:
     Returns:
         The lines, separated by commas.
     """
-    lines = sorted(_find_unlogged(measurement))
-    return ", ".join(f"{line}*" if line in ran else str(line) for line in lines)
+    branches = _find_unlogged(measurement)
+    return ", ".join(f"{b.line}*" if b.body_line in ran else str(b.line) for b in branches)
