@@ -1,0 +1,41 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Packaging and build output
+build/
+dist/
+wheels/
+*.egg-info/
+requirements.txt
+
+# Environments
+.venv/
+.env
+
+# Tests and coverage
+.pytest_cache/
+.tox/
+.hypothesis/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+test-reports/
+
+# Documentation build output
+site/
+
+# Tool caches
+.ruff_cache/
+.pyrefly_cache/
+
+# Editors and OS
+.idea/
+.vscode/
+.DS_Store
+
+# Agent instructions and settings, kept per checkout
+CLAUDE.md
+AGENTS.md
+.claude/

@@ -1,0 +1,42 @@
+site_name: birling
+site_description: Measure how well Python code is covered by log calls.
+site_author: Berislav Lopac <berislav@lopac.net>
+use_directory_urls: false
+theme:
+  name: materialx
+  icon:
+    logo: fontawesome/solid/tree
+  features:
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
+plugins:
+  - search
+  - mkapi
+markdown_extensions:
+  - attr_list
+  - pymdownx.highlight
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - index.md
+  - usage.md
+  - configuration.md
+  - how-it-works.md
+  - API reference: reference.md
