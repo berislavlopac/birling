@@ -67,6 +67,12 @@ class Config:
     branches: frozenset[BranchKind] = frozenset({BranchKind.EXCEPT})
     """The kinds of branch that should log, unless they end by raising."""
 
+    ignore_exceptions: frozenset[str] = frozenset()
+    """Exception types that never need a log, matched by the last part of their names.
+
+    A handler that catches only these need not log.
+    """
+
     level_methods: Mapping[str, str] = field(
         default_factory=lambda: dict(_STANDARD_LEVEL_METHODS)
     )
@@ -126,6 +132,7 @@ class Config:
         defaults = cls()
         return cls(
             branches=_read_kinds(table, defaults.branches),
+            ignore_exceptions=_read_names(table, "ignore-exceptions"),
             level_methods={**defaults.level_methods, **_read_levels(table, "level-methods")},
             logger_factories=defaults.logger_factories | _read_names(table, "logger-factories"),
             logger_modules=defaults.logger_modules | _read_names(table, "logger-modules"),

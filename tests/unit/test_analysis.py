@@ -38,6 +38,7 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
                     line=6,
                     body_line=7,
                     condition="not request",
+                    exceptions=(),
                     always_raises=False,
                     log_calls=(LogCall(line=7, level="warning"),),
                 ),
@@ -46,6 +47,7 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
                     line=11,
                     body_line=12,
                     condition="TimeoutError",
+                    exceptions=("TimeoutError",),
                     always_raises=False,
                     log_calls=(),
                 ),
@@ -54,6 +56,7 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
                     line=13,
                     body_line=14,
                     condition="ValueError",
+                    exceptions=("ValueError",),
                     always_raises=True,
                     log_calls=(LogCall(line=14, level="exception"),),
                 ),
@@ -212,6 +215,51 @@ def test_a_branch_opens_on_its_if_case_except_or_else_line():
         (BranchKind.TRY_ELSE, 15, 15),
         (BranchKind.CASE, 18, 20),
     ]
+
+
+def test_a_branch_is_marked_by_an_ignore_comment_on_the_line_that_opens_it():
+    source = dedent("""
+        def load(path, cache):
+            try:
+                return read(path)
+            except KeyError:  # birling: ignore
+                return None
+            except OSError:
+                return None  # birling: ignore
+            else:  # birling: ignore
+                cache.add(path)
+    """)
+
+    [load] = collect_units(source, Config())
+
+    assert [(b.kind, b.has_ignore_comment) for b in load.branches] == [
+        (BranchKind.EXCEPT, True),
+        (BranchKind.EXCEPT, False),
+        (BranchKind.TRY_ELSE, True),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("caught", "exceptions"),
+    [
+        ("KeyError", ("KeyError",)),
+        ("(KeyError, requests.Timeout)", ("KeyError", "requests.Timeout")),
+        ("errors()", ("errors()",)),
+        ("", ()),
+    ],
+)
+def test_a_handler_lists_the_exceptions_it_catches_as_written(caught, exceptions):
+    source = dedent(f"""
+        def load(path):
+            try:
+                read(path)
+            except {caught}:
+                pass
+    """)
+
+    [load] = collect_units(source, Config())
+
+    assert [branch.exceptions for branch in load.branches] == [exceptions]
 
 
 def test_a_case_is_selected_by_its_pattern_and_guard():
@@ -430,6 +478,7 @@ def test_module_level_code_is_a_unit_of_its_own_when_configured():
                 line=7,
                 body_line=8,
                 condition="ImportError",
+                exceptions=("ImportError",),
                 always_raises=False,
                 log_calls=(LogCall(line=8, level="info"),),
             ),
@@ -444,6 +493,7 @@ def test_a_branch_is_logged_when_it_holds_a_log_call():
         line=11,
         body_line=12,
         condition="OSError",
+        exceptions=("OSError",),
         always_raises=False,
         log_calls=(LogCall(line=12, level="warning"),),
     )
@@ -459,6 +509,7 @@ def test_a_branch_is_not_logged_without_a_log_call():
         line=11,
         body_line=12,
         condition="OSError",
+        exceptions=("OSError",),
         always_raises=False,
         log_calls=(),
     )

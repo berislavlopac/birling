@@ -2,7 +2,7 @@
 
 import ast
 from bisect import bisect_right
-from collections.abc import Iterable, Iterator
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
 import io
 from itertools import pairwise
@@ -75,6 +75,9 @@ class Layout:
     else_lines: tuple[int, ...]
     """The lines of the `else:` that open blocks, in order."""
 
+    comments: Mapping[int, str]
+    """The comments, by line."""
+
     def find_else_line(self, line: int) -> int:
         """Return the line of the `else:` that opens a block.
 
@@ -99,10 +102,13 @@ def to_layout(source: str) -> Layout:
     Returns:
         The layout of the module's lines.
     """
-    tokens = tokenize.generate_tokens(io.StringIO(source).readline)
+    tokens = list(tokenize.generate_tokens(io.StringIO(source).readline))
     else_lines = tuple(
         token.start[0]
         for token, following in pairwise(tokens)
         if token.type == tokenize.NAME and token.string == "else" and following.string == ":"
     )
-    return Layout(else_lines)
+    comments = {
+        token.start[0]: token.string for token in tokens if token.type == tokenize.COMMENT
+    }
+    return Layout(else_lines, comments)

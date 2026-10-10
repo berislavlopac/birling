@@ -107,25 +107,27 @@ def test_parse_returns_the_syntax_tree_without_showing_warnings():
     assert assignment.value.value == "\\d+"
 
 
-def test_to_layout_finds_the_else_that_opens_a_block():
+def test_to_layout_finds_the_comments_and_the_else_that_opens_a_block():
     """An `else` followed by a colon opens a block; that of a conditional expression does not."""
     source = dedent("""
         if ready:
             value = start() if ready else stop()
-        else:
+        else:  # birling: ignore
             value = None
         for item in items:
-            pass
+            pass  # nothing to do
         else: done()
     """)
 
     layout = to_layout(source)
 
-    assert layout == Layout(else_lines=(4, 8))
+    assert layout == Layout(
+        else_lines=(4, 8), comments={4: "# birling: ignore", 7: "# nothing to do"}
+    )
 
 
 def test_a_layout_finds_the_else_that_opens_the_block_starting_on_a_line():
-    layout = Layout(else_lines=(4, 8))
+    layout = Layout(else_lines=(4, 8), comments={})
 
     else_line = layout.find_else_line(6)
 

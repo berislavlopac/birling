@@ -4,6 +4,8 @@ import ast
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field, replace
 from itertools import chain
+import re
+from typing import NamedTuple
 
 from birling.config import BranchKind, Config
 from birling.recognition import (
@@ -20,6 +22,9 @@ MODULE_UNIT_NAME = "<module>"
 
 # The kinds of branch opened by an `else:`, whose line the syntax tree does not record.
 _ELSE_KINDS = frozenset({BranchKind.ELSE, BranchKind.TRY_ELSE, BranchKind.LOOP_ELSE})
+
+# The comment that accepts a branch without a log call, on the line that opens it.
+_IGNORE_COMMENT = re.compile(r"#\s*birling:\s*ignore\b")
 
 
 @dataclass(frozen=True)
@@ -41,6 +46,12 @@ class Branch:
     Empty for an `else` and for a bare `except`.
     """
 
+    exceptions: tuple[str, ...]
+    """The exception types an `except` handler catches, as written.
+
+    Empty for other kinds of branch and for a bare `except`.
+    """
+
     always_raises: bool
     """Whether every path through the branch ends by raising."""
 
@@ -49,6 +60,9 @@ class Branch:
 
     Those in lambdas are included only when the configuration says so.
     """
+
+    has_ignore_comment: bool = False
+    """Whether the line that opens the branch carries a `# birling: ignore` comment."""
 
     @property
     def is_logged(self) -> bool:
@@ -100,10 +114,10 @@ def collect_units(source: str, config: Config) -> tuple[Unit, ...]:
 
 
 def _place_branches(unit: Unit, layout: Layout) -> Unit:
-    """Move a unit's `else` branches to their `else:` line, and order its branches by line.
+    """Place a unit's branches on their opening lines, with the comments there, in order.
 
     The walk places an `else` branch at its first statement, since only the tokens show
-    the line of the `else:` itself.
+    the line of the `else:` itself, and the comments.
 
     Args:
         unit: The unit as the walk built it.
@@ -112,16 +126,27 @@ def _place_branches(unit: Unit, layout: Layout) -> Unit:
     Returns:
         The unit, with its branches at their opening lines, in order.
     """
-    branches = (
-        replace(branch, line=layout.find_else_line(branch.body_line))
-        if branch.kind in _ELSE_KINDS
-        else branch
-        for branch in unit.branches
-    )
+    branches = []
+    for branch in unit.branches:
+        line = branch.line
+        if branch.kind in _ELSE_KINDS:
+            line = layout.find_else_line(branch.body_line)
+        ignored = bool(_IGNORE_COMMENT.search(layout.comments.get(line, "")))
+        branches.append(replace(branch, line=line, has_ignore_comment=ignored))
     return replace(unit, branches=tuple(sorted(branches, key=lambda branch: branch.line)))
 
 
 _Definition = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+
+
+class _Found(NamedTuple):
+    """A branch as the walk finds it, before its log calls are recognised."""
+
+    kind: BranchKind
+    line: int
+    condition: str
+    exceptions: tuple[str, ...]
+    body: list[ast.stmt]
 
 
 @dataclass
@@ -129,8 +154,7 @@ class _Scan:
     """What a single walk finds in a unit's own code, before any call is recognised."""
 
     assignments: list[ast.Assign | ast.AnnAssign] = field(default_factory=list)
-    branches: list[tuple[BranchKind, int, str, list[ast.stmt]]] = field(default_factory=list)
-    """Each branch's kind, opening line, condition and body."""
+    branches: list[_Found] = field(default_factory=list)
     calls: list[tuple[ast.Call, tuple[int, ...]]] = field(default_factory=list)
     """Each call with the indices of the branches it is in."""
     definitions: list[_Definition] = field(default_factory=list)
@@ -168,9 +192,9 @@ def _scan(statements: list[ast.stmt], config: Config) -> _Scan:
                 scan.calls.append((node, enclosing))
             case ast.Assign() | ast.AnnAssign():
                 scan.assignments.append(node)
-        for kind, line, condition, body in _to_branches(node):
-            branch_of.update((id(statement), len(scan.branches)) for statement in body)
-            scan.branches.append((kind, line, condition, body))
+        for found in _to_branches(node):
+            branch_of.update((id(statement), len(scan.branches)) for statement in found.body)
+            scan.branches.append(found)
         children = reversed(list(ast.iter_child_nodes(node)))
         stack.extend((child, enclosing) for child in children)
     return scan
@@ -281,14 +305,15 @@ def _to_unit(name: str, line: int, scan: _Scan, scope: LoggerScope, config: Conf
     ]
     branches = (
         Branch(
-            kind=kind,
-            line=opening,
-            body_line=body[0].lineno,
-            condition=condition,
-            always_raises=_always_raises(body),
+            kind=found.kind,
+            line=found.line,
+            body_line=found.body[0].lineno,
+            condition=found.condition,
+            exceptions=found.exceptions,
+            always_raises=_always_raises(found.body),
             log_calls=tuple(log_call for log_call, within in calls if index in within),
         )
-        for index, (kind, opening, condition, body) in enumerate(scan.branches)
+        for index, found in enumerate(scan.branches)
     )
     return Unit(
         name=name,
@@ -298,7 +323,7 @@ def _to_unit(name: str, line: int, scan: _Scan, scope: LoggerScope, config: Conf
     )
 
 
-def _to_branches(node: ast.AST) -> Iterator[tuple[BranchKind, int, str, list[ast.stmt]]]:
+def _to_branches(node: ast.AST) -> Iterator[_Found]:
     """Yield the branches a node opens, without looking into its children.
 
     An `else` branch is placed at its first statement, since the syntax tree does not
@@ -308,31 +333,52 @@ def _to_branches(node: ast.AST) -> Iterator[tuple[BranchKind, int, str, list[ast
         node: Any node.
 
     Yields:
-        Each branch's kind, opening line, condition and body.
+        Each branch the node opens.
     """
     match node:
         case ast.If(test=test, body=body, orelse=orelse):
-            yield BranchKind.IF, node.lineno, ast.unparse(test), body
+            yield _Found(BranchKind.IF, node.lineno, ast.unparse(test), (), body)
             if orelse and not _is_elif(node):
-                yield BranchKind.ELSE, orelse[0].lineno, "", orelse
+                yield _Found(BranchKind.ELSE, orelse[0].lineno, "", (), orelse)
         case (
             ast.Try(handlers=handlers, orelse=orelse)
             | ast.TryStar(handlers=handlers, orelse=orelse)
         ):
             for handler in handlers:
                 caught = ast.unparse(handler.type) if handler.type else ""
-                yield BranchKind.EXCEPT, handler.lineno, caught, handler.body
+                exceptions = _to_exceptions(handler.type)
+                yield _Found(
+                    BranchKind.EXCEPT, handler.lineno, caught, exceptions, handler.body
+                )
             if orelse:
-                yield BranchKind.TRY_ELSE, orelse[0].lineno, "", orelse
+                yield _Found(BranchKind.TRY_ELSE, orelse[0].lineno, "", (), orelse)
         case (
             ast.For(orelse=orelse) | ast.AsyncFor(orelse=orelse) | ast.While(orelse=orelse)
         ) if orelse:
-            yield BranchKind.LOOP_ELSE, orelse[0].lineno, "", orelse
+            yield _Found(BranchKind.LOOP_ELSE, orelse[0].lineno, "", (), orelse)
         case ast.Match(cases=cases):
             for case in cases:
                 pattern = ast.unparse(case.pattern)
                 guard = f" if {ast.unparse(case.guard)}" if case.guard else ""
-                yield BranchKind.CASE, case.pattern.lineno, f"{pattern}{guard}", case.body
+                condition = f"{pattern}{guard}"
+                yield _Found(BranchKind.CASE, case.pattern.lineno, condition, (), case.body)
+
+
+def _to_exceptions(caught: ast.expr | None) -> tuple[str, ...]:
+    """Return the exception types an `except` names, as written.
+
+    Args:
+        caught: What the `except` names: a type, a tuple of them, or nothing.
+
+    Returns:
+        The types; none for a bare `except`.
+    """
+    match caught:
+        case None:
+            return ()
+        case ast.Tuple(elts=elements):
+            return tuple(ast.unparse(element) for element in elements)
+    return (ast.unparse(caught),)
 
 
 def _is_elif(node: ast.If) -> bool:

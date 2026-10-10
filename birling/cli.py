@@ -33,17 +33,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     pyproject = arguments.config or (_PYPROJECT if _PYPROJECT.exists() else None)
     try:
         config = Config.from_pyproject(pyproject) if pyproject else Config()
-    except (ConfigError, OSError, tomllib.TOMLDecodeError) as error:
+    except (ConfigError, OSError, tomllib.TOMLDecodeError) as error:  # birling: ignore
         return _fail(f"cannot read {pyproject}: {error}")
     try:
         measurements = measure_paths(arguments.paths, config)
-    except MeasurementError as error:
+    except MeasurementError as error:  # birling: ignore
         return _fail(f"cannot measure {error}")
     executed = None
     if arguments.coverage_file:
         try:
             executed = read_executed_lines(arguments.coverage_file)
-        except CoverageDataError as error:
+        except CoverageDataError as error:  # birling: ignore
             return _fail(f"cannot read the coverage data in {error}")
     print(to_text(measurements, executed), end="")
     fail_under = config.fail_under if arguments.fail_under is None else arguments.fail_under

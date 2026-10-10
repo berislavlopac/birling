@@ -31,6 +31,21 @@ A branch should log when its kind is one of those configured in `branches`, whic
 
 A branch counts as raising only when every path through it raises. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, should log: on the path that returns, the exception is swallowed. A way out of a branch is a `return`, or a `break` or `continue` that leaves the loop around it; an `if` with an `else`, a `try` or a `match` raises when all of its paths do.
 
+## Accepting a branch without a log
+
+Some branches rightly do not log, such as `except KeyError: return default`. There are two ways to accept them, and an accepted branch drops out of the count.
+
+A `# birling: ignore` comment on the line that opens the branch accepts that branch:
+
+```python
+try:
+    return cache[key]
+except KeyError:  # birling: ignore
+    return default
+```
+
+The `ignore-exceptions` list in the [configuration](configuration.md#what-should-log) accepts every handler that catches only the exceptions it names. A bare `except` catches everything, so the list cannot accept it.
+
 ## Log calls
 
 A call is a log call when it calls a method that logs on a logger, such as `log.warning(...)`. A method logs when its name is one of the level methods, such as `info` or `error`, or is `log`, which takes its level from its first argument.

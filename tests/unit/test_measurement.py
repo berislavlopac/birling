@@ -38,6 +38,7 @@ def test_measure_source_keeps_the_branches_that_should_log_for_each_unit():
         line=8,
         body_line=9,
         condition="TimeoutError",
+        exceptions=("TimeoutError",),
         always_raises=False,
         log_calls=(),
     )
@@ -46,6 +47,7 @@ def test_measure_source_keeps_the_branches_that_should_log_for_each_unit():
         line=10,
         body_line=11,
         condition="ConnectionError",
+        exceptions=("ConnectionError",),
         always_raises=False,
         log_calls=(LogCall(line=11, level="warning"),),
     )
@@ -54,6 +56,7 @@ def test_measure_source_keeps_the_branches_that_should_log_for_each_unit():
         line=13,
         body_line=14,
         condition="ValueError",
+        exceptions=("ValueError",),
         always_raises=True,
         log_calls=(),
     )
@@ -140,6 +143,56 @@ def test_a_handler_that_raises_on_only_some_paths_should_log():
     assert measurement.branch_count == 1
 
 
+def test_a_branch_accepted_by_an_ignore_comment_need_not_log():
+    source = dedent("""
+        def lookup(cache, key):
+            try:
+                return cache[key]
+            except LookupError:  # birling: ignore
+                return None
+    """)
+
+    measurement = measure_source(source)
+
+    assert measurement.branch_count == 0
+
+
+@pytest.mark.parametrize(
+    "caught", ["KeyError", "builtins.KeyError", "(KeyError, asyncio.CancelledError)"]
+)
+def test_a_handler_catching_only_ignored_exceptions_need_not_log(caught):
+    """Names are matched by their last part, in the handler and in the configuration."""
+    source = dedent(f"""
+        def lookup(cache, key):
+            try:
+                return cache[key]
+            except {caught}:
+                return None
+    """)
+    config = Config(ignore_exceptions=frozenset({"KeyError", "asyncio.CancelledError"}))
+
+    measurement = measure_source(source, config)
+
+    assert measurement.branch_count == 0
+
+
+@pytest.mark.parametrize("caught", ["(KeyError, ValueError)", "Exception", ""])
+def test_a_handler_catching_any_other_exception_should_log(caught):
+    """A bare `except` catches everything, so no list can accept it."""
+    source = dedent(f"""
+        def lookup(cache, key):
+            try:
+                return cache[key]
+            except {caught}:
+                return None
+    """)
+    config = Config(ignore_exceptions=frozenset({"KeyError"}))
+
+    measurement = measure_source(source, config)
+
+    assert measurement.branch_count == 1
+
+
 def test_other_kinds_of_branch_need_not_log_by_default():
     source = dedent("""
         def check(value):
@@ -218,6 +271,7 @@ def test_a_unit_measurement_lists_the_branches_that_should_log_but_do_not():
         line=3,
         body_line=4,
         condition="TimeoutError",
+        exceptions=("TimeoutError",),
         always_raises=False,
         log_calls=(),
     )
@@ -226,6 +280,7 @@ def test_a_unit_measurement_lists_the_branches_that_should_log_but_do_not():
         line=5,
         body_line=6,
         condition="ConnectionError",
+        exceptions=("ConnectionError",),
         always_raises=False,
         log_calls=(LogCall(line=6, level="warning"),),
     )

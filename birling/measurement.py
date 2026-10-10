@@ -220,15 +220,21 @@ def _measure(source: str, config: Config) -> Measurement:
 
 
 def _should_log(branch: Branch, config: Config) -> bool:
-    """Tell whether a branch should log: its kind is configured and it does not raise.
+    """Tell whether a branch should log.
 
-    Raising leaves the logging to whatever handles the exception.
+    It should when its kind is configured, unless it raises on every path, which leaves the
+    logging to whatever handles the exception, or it is accepted without a log: by a
+    `# birling: ignore` comment, or by catching only exceptions that never need one.
 
     Args:
         branch: The branch.
-        config: Which kinds of branch should log.
+        config: Which kinds of branch should log, and which exceptions need no log.
 
     Returns:
         Whether the branch should log.
     """
-    return branch.kind in config.branches and not branch.always_raises
+    if branch.kind not in config.branches or branch.always_raises or branch.has_ignore_comment:
+        return False
+    ignored = {name.rpartition(".")[2] for name in config.ignore_exceptions}
+    caught = {name.rpartition(".")[2] for name in branch.exceptions}
+    return not caught or not caught <= ignored

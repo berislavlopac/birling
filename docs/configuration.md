@@ -16,6 +16,7 @@ An unknown key or a value of the wrong type stops the command with exit status 2
 | Key | Default | Meaning |
 |---|---|---|
 | `branches` | `["except"]` | The kinds of branch that should log, unless they end by raising: any of `except`, `if`, `else`, `case`, `try-else` and `loop-else`. See [How it works](how-it-works.md#branches). Replaces the default. |
+| `ignore-exceptions` | none | Exception types that never need a log, such as `["KeyError", "StopIteration"]`. A handler that catches only these need not log. Names are matched by their last part, so `KeyError` also matches `builtins.KeyError`. See [How it works](how-it-works.md#accepting-a-branch-without-a-log). |
 | `module-level` | `false` | Whether a module's own code, outside its functions and classes, is measured as a unit named `<module>`. Off by default, because the usual handler at module level is an optional import, such as `except ImportError:`. |
 | `lambdas` | `false` | Whether a log call in a lambda counts for the code the lambda is written in. Off by default, because a lambda's body runs when the lambda is called, not where it is written. |
 | `fail-under` | `0` | The lowest acceptable score, from 0 to 100. Below it, the command exits with status 1. |
