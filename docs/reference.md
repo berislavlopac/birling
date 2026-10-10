@@ -36,8 +36,6 @@
 
 ::: birling.analysis.Branch
 
-::: birling.analysis.Ending
-
 ## Recognition
 
 ::: birling.recognition.recognise

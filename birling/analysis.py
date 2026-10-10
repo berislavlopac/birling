@@ -3,7 +3,6 @@
 import ast
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
-from enum import StrEnum
 from itertools import chain
 
 from birling.config import BranchKind, Config
@@ -17,16 +16,6 @@ from birling.recognition import (
 
 MODULE_UNIT_NAME = "<module>"
 """The name of the unit that holds a module's own code, as Python names its code object."""
-
-
-class Ending(StrEnum):
-    """How a branch ends: what its last statement does."""
-
-    FALLS_THROUGH = "falls through"
-    RETURNS = "returns"
-    RAISES = "raises"
-    CONTINUES = "continues"
-    BREAKS = "breaks"
 
 
 @dataclass(frozen=True)
@@ -45,8 +34,8 @@ class Branch:
     Empty for an `else` and for a bare `except`.
     """
 
-    ending: Ending
-    """How the branch ends."""
+    always_raises: bool
+    """Whether every path through the branch ends by raising."""
 
     log_calls: tuple[LogCall, ...]
     """The log calls in the branch, those in its nested statements included.
@@ -263,7 +252,7 @@ def _to_unit(name: str, line: int, scan: _Scan, scope: LoggerScope, config: Conf
             kind=kind,
             line=body[0].lineno,
             condition=condition,
-            ending=_to_ending(body[-1]),
+            always_raises=_always_raises(body),
             log_calls=tuple(log_call for log_call, within in calls if index in within),
         )
         for index, (kind, condition, body) in enumerate(scan.branches)
@@ -326,22 +315,93 @@ def _is_elif(node: ast.If) -> bool:
     return not rest and isinstance(first, ast.If) and first.col_offset == node.col_offset
 
 
-def _to_ending(statement: ast.stmt) -> Ending:
-    """Return how a branch ends, from its last statement.
+def _always_raises(statements: list[ast.stmt]) -> bool:
+    """Tell whether every path through a block of statements ends by raising.
+
+    The statements are followed in order: the block raises at the first statement that
+    always raises, unless an earlier one offers a way out.
 
     Args:
-        statement: The branch's last statement.
+        statements: The block.
 
     Returns:
-        The ending.
+        Whether every path through the block raises.
+    """
+    for statement in statements:
+        if _escapes(statement):
+            return False
+        if _raises(statement):
+            return True
+    return False
+
+
+def _raises(statement: ast.stmt) -> bool:
+    """Tell whether every path through a statement ends by raising.
+
+    A compound statement raises when all of its paths do; a `match` needs a last case that
+    catches everything. A loop may not run at all, so it never counts as raising.
+
+    Args:
+        statement: The statement.
+
+    Returns:
+        Whether every path through the statement raises.
     """
     match statement:
-        case ast.Return():
-            return Ending.RETURNS
         case ast.Raise():
-            return Ending.RAISES
-        case ast.Continue():
-            return Ending.CONTINUES
-        case ast.Break():
-            return Ending.BREAKS
-    return Ending.FALLS_THROUGH
+            return True
+        case ast.If(body=body, orelse=orelse):
+            return _always_raises(body) and _always_raises(orelse)
+        case ast.With(body=body) | ast.AsyncWith(body=body):
+            return _always_raises(body)
+        case (
+            ast.Try(body=body, handlers=handlers, orelse=orelse, finalbody=finalbody)
+            | ast.TryStar(body=body, handlers=handlers, orelse=orelse, finalbody=finalbody)
+        ):
+            handled = all(_always_raises(handler.body) for handler in handlers)
+            completed = _always_raises(body) or _always_raises(orelse)
+            return _always_raises(finalbody) or (handled and completed)
+        case ast.Match(cases=cases):
+            last = cases[-1].pattern
+            catches_all = isinstance(last, ast.MatchAs) and last.pattern is None
+            return (
+                catches_all
+                and cases[-1].guard is None
+                and all(_always_raises(case.body) for case in cases)
+            )
+    return False
+
+
+def _escapes(statement: ast.stmt) -> bool:
+    """Tell whether a statement holds a way out of its block other than raising.
+
+    A way out is a `return`, or a `break` or `continue` that leaves the loop around the
+    block rather than one within the statement. Nested functions, classes and lambdas are
+    not looked into.
+
+    Args:
+        statement: The statement.
+
+    Returns:
+        Whether the statement holds a way out.
+    """
+    stack: list[tuple[ast.AST, bool]] = [(statement, False)]
+    while stack:
+        node, in_loop = stack.pop()
+        match node:
+            case ast.Return():
+                return True
+            case ast.Break() | ast.Continue() if not in_loop:
+                return True
+            case ast.FunctionDef() | ast.AsyncFunctionDef() | ast.ClassDef() | ast.Lambda():
+                continue
+            case (
+                ast.For(body=body, orelse=orelse)
+                | ast.AsyncFor(body=body, orelse=orelse)
+                | ast.While(body=body, orelse=orelse)
+            ):
+                stack.extend((child, True) for child in body)
+                stack.extend((child, in_loop) for child in orelse)
+                continue
+        stack.extend((child, in_loop) for child in ast.iter_child_nodes(node))
+    return False

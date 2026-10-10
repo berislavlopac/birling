@@ -5,7 +5,7 @@ import warnings
 
 import pytest
 
-from birling.analysis import Branch, Ending, Unit
+from birling.analysis import Branch, Unit
 from birling.config import BranchKind, Config
 from birling.measurement import (
     Measurement,
@@ -37,21 +37,21 @@ def test_measure_source_keeps_the_branches_that_should_log_for_each_unit():
         kind=BranchKind.EXCEPT,
         line=9,
         condition="TimeoutError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(),
     )
     connection = Branch(
         kind=BranchKind.EXCEPT,
         line=11,
         condition="ConnectionError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(LogCall(line=11, level="warning"),),
     )
     value = Branch(
         kind=BranchKind.EXCEPT,
         line=14,
         condition="ValueError",
-        ending=Ending.RAISES,
+        always_raises=True,
         log_calls=(),
     )
 
@@ -113,6 +113,23 @@ def test_a_handler_that_ends_without_raising_should_log(statement):
                     read(path)
                 except OSError:
                     {statement}
+    """)
+
+    measurement = measure_source(source)
+
+    assert measurement.branch_count == 1
+
+
+def test_a_handler_that_raises_on_only_some_paths_should_log():
+    """On the path that returns, the exception is swallowed and nothing else will log it."""
+    source = dedent("""
+        def load(path):
+            try:
+                return read(path)
+            except OSError as error:
+                if error.errno is None:
+                    raise
+                return None
     """)
 
     measurement = measure_source(source)
@@ -197,14 +214,14 @@ def test_a_unit_measurement_lists_the_branches_that_should_log_but_do_not():
         kind=BranchKind.EXCEPT,
         line=4,
         condition="TimeoutError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(),
     )
     logged = Branch(
         kind=BranchKind.EXCEPT,
         line=6,
         condition="ConnectionError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(LogCall(line=6, level="warning"),),
     )
     unit = Unit(name="handle", line=1, branches=(unlogged, logged), log_calls=logged.log_calls)

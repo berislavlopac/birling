@@ -3,7 +3,7 @@ from textwrap import dedent, indent
 
 import pytest
 
-from birling.analysis import MODULE_UNIT_NAME, Branch, Ending, Unit, collect_units
+from birling.analysis import MODULE_UNIT_NAME, Branch, Unit, collect_units
 from birling.config import BranchKind, Config
 from birling.recognition import LogCall
 
@@ -39,21 +39,21 @@ def test_collect_units_returns_each_function_with_its_branches_and_log_calls():
                     kind=BranchKind.IF,
                     line=7,
                     condition="not request",
-                    ending=Ending.RETURNS,
+                    always_raises=False,
                     log_calls=(LogCall(line=7, level="warning"),),
                 ),
                 Branch(
                     kind=BranchKind.EXCEPT,
                     line=12,
                     condition="TimeoutError",
-                    ending=Ending.RETURNS,
+                    always_raises=False,
                     log_calls=(),
                 ),
                 Branch(
                     kind=BranchKind.EXCEPT,
                     line=14,
                     condition="ValueError",
-                    ending=Ending.RAISES,
+                    always_raises=True,
                     log_calls=(LogCall(line=14, level="exception"),),
                 ),
             ),
@@ -107,30 +107,53 @@ def test_collect_units_finds_no_branch_in_a_block_that_always_runs_or_an_express
 
 
 @pytest.mark.parametrize(
-    ("statement", "ending"),
+    ("handler", "always_raises"),
     [
-        ("return None", Ending.RETURNS),
-        ("raise", Ending.RAISES),
-        ("raise RuntimeError('failed') from error", Ending.RAISES),
-        ("continue", Ending.CONTINUES),
-        ("break", Ending.BREAKS),
-        ("stop()", Ending.FALLS_THROUGH),
+        ("raise", True),
+        ("raise RuntimeError('failed') from error", True),
+        ("log.warning('failed')\nraise", True),
+        ("return None", False),
+        ("continue", False),
+        ("break", False),
+        ("stop()", False),
+        ("if error.args:\n    raise\nreturn None", False),
+        ("if error.args:\n    return None\nraise", False),
+        ("if error.args:\n    raise\nraise RuntimeError('failed')", True),
+        ("if error.args:\n    raise\nelse:\n    raise RuntimeError('failed')", True),
+        ("for retry in retries:\n    if retry():\n        break\nraise", True),
+        ("for retry in retries:\n    if retry():\n        return None\nraise", False),
+        ("for retry in retries:\n    retry()\nelse:\n    continue\nraise", False),
+        ("with lock:\n    raise", True),
+        ("try:\n    undo()\nexcept OSError:\n    raise\nelse:\n    raise", True),
+        ("try:\n    undo()\nexcept OSError:\n    return None\nraise", False),
+        ("try:\n    undo()\nexcept OSError:\n    raise\nfinally:\n    cleanup()", False),
+        ("try:\n    undo()\nfinally:\n    raise", True),
+        ("match error.args:\n    case []:\n        raise\n    case _:\n        raise", True),
+        ("match error.args:\n    case []:\n        raise", False),
+        (
+            "match error.args:\n    case []:\n        raise\n    case _ if error:\n        raise",
+            False,
+        ),
+        ("def retry():\n    return None\nraise", True),
     ],
 )
-def test_a_branch_ends_as_its_last_statement_does(statement, ending):
-    source = dedent(f"""
-        def run(items):
-            for item in items:
-                try:
-                    start(item)
-                except OSError as error:
-                    {statement}
-    """)
-    module = ast.parse(source)
+def test_a_branch_always_raises_when_every_path_through_it_does(handler, always_raises):
+    """A `return`, or a `break` or `continue` that leaves the loop around it, is a way out.
 
-    [run] = collect_units(module, Config())
+    The handler's own branch comes first, before any branch nested in it.
+    """
+    module = ast.parse(
+        "def run(items):\n"
+        "    for item in items:\n"
+        "        try:\n"
+        "            start(item)\n"
+        "        except OSError as error:\n" + indent(handler, " " * 12)
+    )
 
-    assert [branch.ending for branch in run.branches] == [ending]
+    run, *_nested = collect_units(module, Config())
+
+    handler_branch = run.branches[0]
+    assert handler_branch.always_raises is always_raises
 
 
 def test_an_elif_is_an_if_branch_and_an_if_in_an_else_is_both():
@@ -151,14 +174,14 @@ def test_an_elif_is_an_if_branch_and_an_if_in_an_else_is_both():
 
     assert check.branches == (
         Branch(
-            BranchKind.IF, line=4, condition="value == 1", ending=Ending.RETURNS, log_calls=()
+            BranchKind.IF, line=4, condition="value == 1", always_raises=False, log_calls=()
         ),
         Branch(
-            BranchKind.IF, line=6, condition="value == 2", ending=Ending.RETURNS, log_calls=()
+            BranchKind.IF, line=6, condition="value == 2", always_raises=False, log_calls=()
         ),
-        Branch(BranchKind.ELSE, line=8, condition="", ending=Ending.RETURNS, log_calls=()),
+        Branch(BranchKind.ELSE, line=8, condition="", always_raises=False, log_calls=()),
         Branch(
-            BranchKind.IF, line=9, condition="value == 3", ending=Ending.RETURNS, log_calls=()
+            BranchKind.IF, line=9, condition="value == 3", always_raises=False, log_calls=()
         ),
     )
 
@@ -389,7 +412,7 @@ def test_module_level_code_is_a_unit_of_its_own_when_configured():
                 kind=BranchKind.EXCEPT,
                 line=8,
                 condition="ImportError",
-                ending=Ending.FALLS_THROUGH,
+                always_raises=False,
                 log_calls=(LogCall(line=8, level="info"),),
             ),
         ),
@@ -402,7 +425,7 @@ def test_a_branch_is_logged_when_it_holds_a_log_call():
         kind=BranchKind.EXCEPT,
         line=12,
         condition="OSError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(LogCall(line=12, level="warning"),),
     )
 
@@ -416,7 +439,7 @@ def test_a_branch_is_not_logged_without_a_log_call():
         kind=BranchKind.EXCEPT,
         line=12,
         condition="OSError",
-        ending=Ending.RETURNS,
+        always_raises=False,
         log_calls=(),
     )
 

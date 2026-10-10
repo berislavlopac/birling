@@ -29,7 +29,7 @@ A log call in a statement nested in a branch belongs to that branch, and to any 
 
 A branch should log when its kind is one of those configured in `branches`, which is only `except` by default, unless it ends by raising. A handler that raises leaves the logging to whatever handles the exception; a handler that returns, continues, breaks or carries on swallows it, and without a log nobody hears about it.
 
-A branch is judged by its last statement. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, counts as raising when the `raise` comes last.
+A branch counts as raising only when every path through it raises. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, should log: on the path that returns, the exception is swallowed. A way out of a branch is a `return`, or a `break` or `continue` that leaves the loop around it; an `if` with an `else`, a `try` or a `match` raises when all of its paths do.
 
 ## Log calls
 

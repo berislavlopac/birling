@@ -8,7 +8,7 @@ import tokenize
 from typing import Self
 import warnings
 
-from birling.analysis import Branch, Ending, Unit, collect_units
+from birling.analysis import Branch, Unit, collect_units
 from birling.config import Config
 
 
@@ -232,4 +232,4 @@ def _should_log(branch: Branch, config: Config) -> bool:
     Returns:
         Whether the branch should log.
     """
-    return branch.kind in config.branches and branch.ending is not Ending.RAISES
+    return branch.kind in config.branches and not branch.always_raises
