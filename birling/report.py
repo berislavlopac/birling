@@ -45,6 +45,38 @@ def to_text(
     return "\n".join(line.rstrip() for line in lines) + "\n"
 
 
+def to_listing(
+    measurements: Mapping[Path, Measurement],
+    executed: Mapping[Path, frozenset[int]] | None = None,
+) -> str:
+    """Return a line for each branch that should log but does not.
+
+    Each line reads `path:line: unit: branch`, which editors and CI logs turn into a link,
+    in the order of the modules and of the branches' lines.
+
+    Args:
+        measurements: The measurement of each module, by path.
+        executed: The lines that ran in the tests, by resolved path; when given, the
+            branches that ran are marked as such.
+
+    Returns:
+        The listing, a line per branch; empty when every branch that should log does.
+    """
+    lines = []
+    for path, measurement in measurements.items():
+        ran = _find_ran(path, executed)
+        names = {
+            branch: measured.unit.name
+            for measured in measurement.units
+            for branch in measured.unlogged
+        }
+        for branch in _find_unlogged(measurement):
+            what = f"{branch.kind} {branch.condition}".rstrip()
+            mark = " (ran in the tests)" if branch.body_line in ran else ""
+            lines.append(f"{path}:{branch.line}: {names[branch]}: {what}{mark}\n")
+    return "".join(lines)
+
+
 def _find_ran(path: Path, executed: Mapping[Path, frozenset[int]] | None) -> frozenset[int]:
     """Return the lines of a module that ran in the tests.
 

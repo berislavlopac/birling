@@ -3,7 +3,7 @@
 ## The command
 
 ```shell
-birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE]
+birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged]
 ```
 
 The command measures the modules and directories given and prints a report. It also runs as `python -m birling`.
@@ -15,6 +15,7 @@ A directory is searched for `.py` files, skipping hidden directories and virtual
 | `--config FILE` | The `pyproject.toml` to read the `[tool.birling]` table from. By default, `pyproject.toml` in the current directory is read if there is one. |
 | `--fail-under SCORE` | Exit with status 1 when the total score is below `SCORE`, overriding `fail-under` in the configuration. |
 | `--coverage-file FILE` | [coverage.py](https://coverage.readthedocs.io/)'s data from a test run, to mark the unlogged branches that ran. Needs the `coverage` extra. |
+| `--show-unlogged` | After the report, list each unlogged branch on a line of its own. |
 | `--version` | Show the version. |
 
 ## The report
@@ -36,6 +37,21 @@ TOTAL                    4       2    50%
 | Unlogged | The line that opens each branch that should log but does not: its `except`, `if`, `elif`, `else` or `case`. |
 
 Only modules with at least one branch that should log get a row. The score depends on the code alone, so it is the same on every run.
+
+## Listing the unlogged branches
+
+With `--show-unlogged`, each unlogged branch gets a line of its own after the report, naming its unit and how the branch is selected. Editors and CI logs turn the `path:line` at its start into a link:
+
+```text
+$ birling shop --show-unlogged
+...
+TOTAL                    4       2    50%
+
+shop/orders.py:12: load_order: except TimeoutError
+shop/payments.py:12: charge: except ValueError
+```
+
+With `--coverage-file`, a branch that ran in the tests is marked `(ran in the tests)`.
 
 ## Exit status
 

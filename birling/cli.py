@@ -9,7 +9,7 @@ import tomllib
 from birling import __version__
 from birling.config import Config, ConfigError
 from birling.measurement import Measurement, MeasurementError, measure_paths
-from birling.report import to_text
+from birling.report import to_listing, to_text
 from birling.runtime import CoverageDataError, read_executed_lines
 
 # Read when present and no other file is named.
@@ -46,6 +46,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         except CoverageDataError as error:  # birling: ignore
             return _fail(f"cannot read the coverage data in {error}")
     print(to_text(measurements, executed), end="")
+    if arguments.show_unlogged and (listing := to_listing(measurements, executed)):
+        print(f"\n{listing}", end="")
     fail_under = config.fail_under if arguments.fail_under is None else arguments.fail_under
     score = Measurement.combine(measurements.values()).score
     if score < fail_under:
@@ -84,6 +86,11 @@ def _to_parser() -> argparse.ArgumentParser:
         type=Path,
         metavar="FILE",
         help="coverage.py's data from a test run, to mark the unlogged branches that ran",
+    )
+    parser.add_argument(
+        "--show-unlogged",
+        action="store_true",
+        help="list each unlogged branch after the report, as path:line",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser

@@ -27,7 +27,7 @@ The `coverage` extra, `./birling[coverage]`, adds coverage.py, which the command
 ## Usage
 
 ```shell
-birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE]
+birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged]
 ```
 
 The command reads its configuration from the `[tool.birling]` table of `pyproject.toml`, and exits with status 1 when the score is below the minimum:

@@ -155,6 +155,24 @@ def test_main_fails_when_it_cannot_read_the_coverage_data(project, capsys):
     )
 
 
+def test_main_lists_each_unlogged_branch_after_the_report_when_asked(project, capsys):
+    status = main(["app", "--show-unlogged"])
+
+    assert status == 0
+    assert capsys.readouterr().out.endswith(
+        "TOTAL                  2       1    50%\n\napp/service.py:10: load: except PermissionError\n"
+    )
+
+
+def test_main_lists_nothing_when_every_branch_that_should_log_does(project, capsys):
+    (project / "app/service.py").write_text("def load():\n    return None\n")
+
+    status = main(["app", "--show-unlogged"])
+
+    assert status == 0
+    assert capsys.readouterr().out.endswith("TOTAL         0       0   100%\n")
+
+
 def test_main_rejects_a_call_without_paths(capsys):
     with pytest.raises(SystemExit) as raised:
         main([])
