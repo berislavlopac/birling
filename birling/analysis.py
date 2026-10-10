@@ -1,10 +1,10 @@
 """Finding the units of a module, with their branches and log calls."""
 
 import ast
+import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field, replace
 from itertools import chain
-import re
 from typing import NamedTuple
 
 from birling.config import BranchKind, Config

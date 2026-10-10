@@ -1,13 +1,13 @@
 """Helpers for reading Python's syntax tree and what it leaves out."""
 
 import ast
+import io
+import tokenize
+import warnings
 from bisect import bisect_right
 from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import dataclass
-import io
 from itertools import pairwise
-import tokenize
-import warnings
 
 NESTED_SCOPES = (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
 """Nodes that open a scope of their own, whose code does not run where it is written."""

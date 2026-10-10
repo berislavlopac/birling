@@ -1,10 +1,10 @@
 """Measuring how well the branches that should log are covered by log calls."""
 
+import io
+import tokenize
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass
-import io
 from pathlib import Path
-import tokenize
 from typing import Self
 
 from birling.analysis import Branch, Unit, collect_units

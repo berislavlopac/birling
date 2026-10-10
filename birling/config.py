@@ -1,10 +1,10 @@
 """What counts as a log call, which branches should log, and the lowest acceptable score."""
 
+import tomllib
 from collections.abc import Mapping
 from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from pathlib import Path
-import tomllib
 from typing import Self
 
 # Where the configuration sits in `pyproject.toml`, used to name a key in an error.

@@ -1,7 +1,7 @@
-from pathlib import Path
 import sysconfig
-from textwrap import dedent
 import warnings
+from pathlib import Path
+from textwrap import dedent
 
 import pytest
 

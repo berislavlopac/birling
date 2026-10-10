@@ -1,11 +1,10 @@
 import ast
 import keyword
-from textwrap import dedent
 import warnings
+from textwrap import dedent
 
-from hypothesis import given
-from hypothesis import strategies as st
 import pytest
+from hypothesis import given, strategies as st
 
 from birling.syntax import (
     NESTED_SCOPES,

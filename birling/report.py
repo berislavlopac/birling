@@ -1,7 +1,7 @@
 """Writing measurements up as a table, a row per module."""
 
-from collections.abc import Mapping
 import math
+from collections.abc import Mapping
 from pathlib import Path
 
 from birling.analysis import Branch

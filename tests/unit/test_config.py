@@ -1,10 +1,9 @@
-from contextlib import suppress
 import re
+from contextlib import suppress
 from textwrap import dedent
 
-from hypothesis import given
-from hypothesis import strategies as st
 import pytest
+from hypothesis import given, strategies as st
 
 from birling.config import BranchKind, Config, ConfigError
 

@@ -1,9 +1,9 @@
 """Telling log calls from other calls."""
 
 import ast
+import re
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field, replace
-import re
 from typing import Self
 
 from birling.config import Config

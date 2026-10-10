@@ -142,7 +142,7 @@ convention = "google"
 
 [tool.ruff.lint.isort]
 known-first-party = ["birling"]
-force-sort-within-sections = true
+combine-as-imports = true
 
 [tool.ruff.format]
 docstring-code-format = false

@@ -1,7 +1,7 @@
 from textwrap import dedent
 
-from coverage import CoverageData
 import pytest
+from coverage import CoverageData
 
 
 @pytest.fixture

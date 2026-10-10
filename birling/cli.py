@@ -1,10 +1,10 @@
 """The `birling` command."""
 
 import argparse
-from collections.abc import Sequence
-from pathlib import Path
 import sys
 import tomllib
+from collections.abc import Sequence
+from pathlib import Path
 
 from birling import __version__
 from birling.config import Config, ConfigError
