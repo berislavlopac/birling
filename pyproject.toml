@@ -16,6 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Programming Language :: Python :: 3.15",
     "Programming Language :: Python :: Implementation :: CPython",
     "Topic :: Software Development :: Quality Assurance",
     "Topic :: System :: Logging",
@@ -67,7 +68,7 @@ fallback_version = "0.0.0"
 default-groups = ["dev", "test"]
 
 [tool.tox]
-env_list = ["py311", "py312", "py313", "py314"]
+env_list = ["py311", "py312", "py313", "py314", "py315"]
 
 [tool.tox.env_run_base]
 runner = "uv-venv-lock-runner"
