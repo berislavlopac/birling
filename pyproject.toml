@@ -23,6 +23,12 @@ classifiers = [
 ]
 dependencies = []
 
+[project.urls]
+documentation = "https://birling.readthedocs.io"
+repository = "https://github.com/berislavlopac/birling"
+issues = "https://github.com/berislavlopac/birling/issues"
+changelog = "https://birling.readthedocs.io/en/stable/changelog.html"
+
 [project.scripts]
 birling = "birling.cli:main"
 

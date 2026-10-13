@@ -1,4 +1,6 @@
 site_name: birling
+site_url: https://birling.readthedocs.io
+repo_url: https://github.com/berislavlopac/birling
 site_description: Measure how well Python code is covered by log calls.
 site_author: Berislav Lopac <berislav@lopac.net>
 use_directory_urls: false
