@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["[0-9]+.[0-9]+.[0-9]+*"]
   pull_request:
 
 concurrency:
@@ -35,3 +36,34 @@ jobs:
         with:
           enable-cache: true
       - run: uv run tox run -e ${{ matrix.toxenv }}
+
+  publish:
+    name: publish
+    needs: [checks, test]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      contents: write  # create the GitHub release
+      id-token: write  # publish to PyPI as a trusted publisher
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # the version comes from the tag
+      - uses: astral-sh/setup-uv@v10.3.0
+      # Outside the checkout, so the source package does not pick it up.
+      - run: uv run python scripts/extract_changelog.py "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+      - run: uv build
+      # Skips files already on PyPI, so a rerun of a failed job can finish the release.
+      - run: uv publish --trusted-publishing always --check-url https://pypi.org/simple/birling/
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE=""
+          if [[ "$GITHUB_REF_NAME" =~ (a|b|rc)[0-9]+$ ]]; then PRERELEASE="--prerelease"; fi
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" $PRERELEASE
+          else
+            gh release create "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" $PRERELEASE
+          fi

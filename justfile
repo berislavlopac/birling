@@ -49,6 +49,27 @@ docs:
 docs-build:
     uv run --group docs mkdocs build --strict
 
+# Add a news fragment: `just news added` (no reference) or `just news fixed 42` (issue #42).
+[group('Release')]
+news type id=('+' + datetime('%s')):
+    uv run towncrier create --edit {{id}}.{{type}}.md
+
+# Preview the changelog section of a version without writing it.
+[group('Release')]
+changelog-draft version:
+    uv run towncrier build --draft --version {{version}}
+
+# Check, collate the changelog, commit, tag and push a release; CI then publishes it.
+[group('Release')]
+[confirm]
+release version: check test-cov
+    @test -n "$(find release-notes -type f ! -name README.md)" || { echo "No news fragments in release-notes/: nothing to release."; exit 1; }
+    uv run towncrier build --yes --version {{version}}
+    git add CHANGELOG.md release-notes
+    git commit -m "release {{version}}"
+    git tag -a {{version}} -m "Release {{version}}"
+    git push --follow-tags origin HEAD
+
 # Reformat the code and sort imports using ruff.
 [group('Development')]
 [confirm]

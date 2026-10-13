@@ -90,7 +90,7 @@ fail_under = 90
 exclude_also = ["pragma: no cover", "@abstract"]
 
 [tool.pyrefly]
-project-includes = ["birling"]
+project-includes = ["birling", "scripts"]
 
 [tool.ruff]
 line-length = 96

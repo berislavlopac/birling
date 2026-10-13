@@ -25,8 +25,11 @@ release-notes/42.fixed.md
 -> A handler that raises on every path no longer counts as unlogged.
 ```
 
-To preview the collated section without changing anything:
+The recipes:
 
-```shell
-uv run towncrier build --draft --version <version>
-```
+| Recipe | Does |
+|---|---|
+| `just news added` | Creates a fragment with no reference and opens it in the editor. |
+| `just news fixed 42` | Creates a fragment for issue 42. |
+| `just changelog-draft 0.2.0` | Shows the section the fragments would make, without changing anything. |
+| `just release 0.2.0` | Runs the checks and tests, collates the fragments into `CHANGELOG.md`, then commits, tags and pushes. CI publishes the tagged version to PyPI and creates the GitHub release. |
