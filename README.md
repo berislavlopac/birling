@@ -16,13 +16,13 @@ TOTAL                    4       2    50%
 
 ## Installation
 
-birling needs Python 3.11 or later and has no dependencies of its own. It is not published on PyPI yet, so install it from a checkout:
+birling needs Python 3.11 or later and has no dependencies of its own. Install it from PyPI:
 
 ```shell
-pip install ./birling
+pip install birling
 ```
 
-The `coverage` extra, `./birling[coverage]`, adds coverage.py, which the command needs to mark the unlogged branches that ran in the tests.
+The `coverage` extra, `birling[coverage]`, adds coverage.py, which the command needs to mark the unlogged branches that ran in the tests.
 
 ## Usage
 

@@ -8,16 +8,16 @@ By default, the places that should log are `except` handlers that do not raise a
 
 ## Installation
 
-birling needs Python 3.11 or later and has no dependencies of its own. It is not published on PyPI yet, so install it from a checkout of its repository:
+birling needs Python 3.11 or later and has no dependencies of its own. Install it from PyPI:
 
 ```shell
-pip install ./birling
+pip install birling
 ```
 
 To mark the gaps that ran in the tests, install the `coverage` extra, which brings in coverage.py:
 
 ```shell
-pip install "./birling[coverage]"
+pip install "birling[coverage]"
 ```
 
 ## Quick start
