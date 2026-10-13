@@ -30,6 +30,8 @@ markdown_extensions:
   - attr_list
   - pymdownx.highlight
   - pymdownx.inlinehilite
+  - pymdownx.snippets:
+      check_paths: true
   - pymdownx.superfences
   - tables
   - toc:
@@ -40,3 +42,4 @@ nav:
   - configuration.md
   - how-it-works.md
   - API reference: reference.md
+  - changelog.md
