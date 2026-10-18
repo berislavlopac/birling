@@ -11,6 +11,7 @@ keys = st.sampled_from(
     [
         "branches",
         "ignore-exceptions",
+        "raising-functions",
         "level-methods",
         "logger-factories",
         "logger-modules",
@@ -47,6 +48,15 @@ def test_the_default_config_expects_handlers_to_log_through_the_standard_logging
     assert config == Config(
         branches=frozenset({BranchKind.EXCEPT}),
         ignore_exceptions=frozenset(),
+        raising_functions=frozenset(
+            {
+                "sys.exit",
+                "exit",
+                "quit",
+                "typing.assert_never",
+                "typing_extensions.assert_never",
+            }
+        ),
         level_methods={
             "debug": "debug",
             "info": "info",
@@ -73,6 +83,7 @@ def test_from_table_builds_a_config_from_the_pyproject_table():
     table = {
         "branches": ["except", "else"],
         "ignore-exceptions": ["KeyError", "asyncio.CancelledError"],
+        "raising-functions": ["sys.exit", "flask.abort"],
         "level-methods": {"success": "info"},
         "logger-factories": ["Logging"],
         "logger-modules": ["pyfastlogging"],
@@ -90,6 +101,7 @@ def test_from_table_builds_a_config_from_the_pyproject_table():
     assert config == Config(
         branches=frozenset({BranchKind.EXCEPT, BranchKind.ELSE}),
         ignore_exceptions=frozenset({"KeyError", "asyncio.CancelledError"}),
+        raising_functions=frozenset({"sys.exit", "flask.abort"}),
         level_methods={**Config().level_methods, "success": "info"},
         logger_factories=frozenset(
             {"getLogger", "get_logger", "getChild", "LoggerAdapter", "Logging"}
@@ -115,6 +127,12 @@ def test_from_table_replaces_the_default_kinds_of_branch():
     config = Config.from_table({"branches": ["if"]})
 
     assert config.branches == frozenset({BranchKind.IF})
+
+
+def test_from_table_replaces_the_default_raising_functions():
+    config = Config.from_table({"raising-functions": ["flask.abort"]})
+
+    assert config.raising_functions == frozenset({"flask.abort"})
 
 
 @pytest.mark.parametrize(

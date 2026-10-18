@@ -31,6 +31,8 @@ A branch should log when its kind is one of those configured in `branches`, whic
 
 A branch counts as raising only when every path through it raises. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, should log: on the path that returns, the exception is swallowed. A way out of a branch is a `return`, or a `break` or `continue` that leaves the loop around it; an `if` with an `else`, a `try` or a `match` raises when all of its paths do.
 
+A call to a function that always raises counts as raising, awaited or not, and returned or not, as `sys.exit()` does by raising `SystemExit`. These functions are named in [`raising-functions`](configuration.md#what-should-log), by default `sys.exit`, the built-ins `exit` and `quit`, and `assert_never` from `typing` or `typing_extensions`. A call is matched by what its name refers to where it is made, as Python resolves it: `exit()` after `from sys import exit` counts, while `quit()` after `from pygame import quit` does not, and neither does a call to a parameter or a function of the module's own that is named `quit`. A name imported from one of two places, as with a fallback import, counts when both places are named. A method of an object, such as `parser.exit()`, does not count, since the name alone cannot tell which object it is called on. A call that ends the process at once, such as `os._exit()`, does not count either: an exception carries on up the stack, where code can catch it and log, while `os._exit()` leaves nothing the chance.
+
 ## Accepting a branch without a log
 
 Some branches rightly do not log, such as `except KeyError: return default`. There are two ways to accept them, and an accepted branch drops out of the count.

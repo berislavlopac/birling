@@ -9,6 +9,7 @@ from hypothesis import given, strategies as st
 from birling.syntax import (
     NESTED_SCOPES,
     Layout,
+    find_bindings,
     parse,
     to_dotted_name,
     to_layout,
@@ -92,6 +93,76 @@ def test_to_dotted_name_returns_none_for_any_other_expression(expression):
     dotted_name = to_dotted_name(node)
 
     assert dotted_name is None
+
+
+def test_find_bindings_gives_each_name_a_scope_binds_with_what_imports_bind_it_to():
+    """A name bound by anything but an import, or by one it cannot resolve, has no target.
+
+    A relative import binds a name to a module the source alone cannot tell, and a `*`
+    import binds names it cannot tell at all. A nested scope binds its names for itself, and
+    so does a comprehension, apart from a `:=` in it.
+    """
+    [definition] = ast.parse(
+        dedent("""
+            def load(path, *args, retries=3, **options):
+                import sys
+                import os.path
+                import xml.etree.ElementTree as ElementTree
+                from typing import assert_never
+                from flask import abort as fail
+                from . import sibling
+                from json import *
+                try:
+                    from ujson import loads
+                except ImportError as error:
+                    from json import loads
+                os = None
+                result = total = 0
+                for item in items:
+                    del item
+                with open(path) as file:
+                    pass
+                match options:
+                    case {"mode": mode, **rest}:
+                        pass
+                    case [first, *others]:
+                        pass
+                names = [last := name for name in items]
+                def helper():
+                    inner = 1
+                class Local:
+                    pass
+        """)
+    ).body
+
+    bindings = find_bindings(walk_scope([definition.args, *definition.body]))
+
+    assert bindings == {
+        "path": None,
+        "args": None,
+        "retries": None,
+        "options": None,
+        "sys": frozenset({"sys"}),
+        "os": None,
+        "ElementTree": frozenset({"xml.etree.ElementTree"}),
+        "assert_never": frozenset({"typing.assert_never"}),
+        "fail": frozenset({"flask.abort"}),
+        "sibling": None,
+        "loads": frozenset({"ujson.loads", "json.loads"}),
+        "error": None,
+        "result": None,
+        "total": None,
+        "item": None,
+        "file": None,
+        "mode": None,
+        "rest": None,
+        "first": None,
+        "others": None,
+        "names": None,
+        "last": None,
+        "helper": None,
+        "Local": None,
+    }
 
 
 def test_parse_returns_the_syntax_tree_without_showing_warnings():

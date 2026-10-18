@@ -94,10 +94,14 @@ def test_measure_source_uses_the_default_config_when_given_none():
     assert measurement == measure_source(source, Config())
 
 
-@pytest.mark.parametrize("statement", ["raise", "raise RuntimeError('failed') from error"])
+@pytest.mark.parametrize(
+    "statement", ["raise", "raise RuntimeError('failed') from error", "sys.exit(error)"]
+)
 def test_a_handler_that_raises_need_not_log(statement):
     """Raising leaves the logging to whatever handles the exception."""
     source = dedent(f"""
+        import sys
+
         def load(path):
             try:
                 return read(path)

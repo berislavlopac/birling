@@ -50,6 +50,97 @@ def to_dotted_name(node: ast.AST) -> str | None:
     return None
 
 
+def find_bindings(nodes: Iterable[ast.AST]) -> dict[str, frozenset[str] | None]:
+    """Return the names that the nodes of one scope bind, with what imports bind them to.
+
+    Every way of binding a name counts: parameters, assignment targets, `def` and `class`,
+    imports, `except ... as` and the captures of a `match` pattern. The variables of a
+    comprehension's `for` belong to the comprehension, so they are left out, and so are the
+    names of a `*` import, which cannot be told from the source.
+
+    Args:
+        nodes: The scope's own nodes, in the order `walk_scope()` yields them; a function's
+            parameters are included by walking its `args` along with its body.
+
+    Returns:
+        The bound names, each with every dotted name an import binds it to, such as
+        `sys.exit` for `from sys import exit`; `None` when anything else binds it, or an
+        import whose target cannot be told.
+    """
+    found: dict[str, set[str] | None] = {}
+    for name, target in _find_each_binding(nodes):
+        targets = found.get(name, set())
+        found[name] = None if targets is None or target is None else targets | {target}
+    return {
+        name: None if targets is None else frozenset(targets) for name, targets in found.items()
+    }
+
+
+def _find_each_binding(nodes: Iterable[ast.AST]) -> Iterator[tuple[str, str | None]]:
+    """Yield each binding of a name among the nodes, in their order.
+
+    A comprehension comes before the variables of its `for`, which are skipped.
+
+    Args:
+        nodes: The nodes, each before its descendants.
+
+    Yields:
+        The bound name, with the dotted name an import binds it to, or `None`.
+    """
+    in_comprehension: set[int] = set()
+    for node in nodes:
+        match node:
+            case ast.comprehension(target=target):
+                in_comprehension.update(id(name) for name in ast.walk(target))
+            case ast.Import() | ast.ImportFrom():
+                yield from _find_import_bindings(node)
+            case ast.Name(id=name, ctx=ast.Store() | ast.Del()) if (
+                id(node) not in in_comprehension
+            ):
+                yield name, None
+            case (
+                ast.FunctionDef(name=name)
+                | ast.AsyncFunctionDef(name=name)
+                | ast.ClassDef(name=name)
+                | ast.arg(arg=name)
+            ):
+                yield name, None
+            case (
+                ast.ExceptHandler(name=str() as name)
+                | ast.MatchAs(name=str() as name)
+                | ast.MatchStar(name=str() as name)
+                | ast.MatchMapping(rest=str() as name)
+            ):
+                yield name, None
+
+
+def _find_import_bindings(
+    node: ast.Import | ast.ImportFrom,
+) -> Iterator[tuple[str, str | None]]:
+    """Yield the names an import binds, with what it binds them to.
+
+    A relative import binds names to modules that cannot be told from the source alone.
+
+    Args:
+        node: The import.
+
+    Yields:
+        The bound name, with the dotted name it is bound to, or `None` when that is unknown.
+    """
+    if isinstance(node, ast.Import):
+        for alias in node.names:
+            if alias.asname:
+                yield alias.asname, alias.name
+            else:
+                first = alias.name.partition(".")[0]
+                yield first, first
+        return
+    prefix = f"{node.module}." if node.module is not None and node.level == 0 else None
+    for alias in node.names:
+        if alias.name != "*":
+            yield alias.asname or alias.name, None if prefix is None else prefix + alias.name
+
+
 def parse(source: str) -> ast.Module:
     """Parse a module's source without showing warnings.
 

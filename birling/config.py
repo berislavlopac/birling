@@ -73,6 +73,16 @@ class Config:
     A handler that catches only these need not log.
     """
 
+    raising_functions: frozenset[str] = frozenset(
+        {"sys.exit", "exit", "quit", "typing.assert_never", "typing_extensions.assert_never"}
+    )
+    """Functions that always raise, so a branch that ends in a call to one counts as raising.
+
+    A function imported from a module is named with its module, as `sys.exit`; a plain name
+    is a built-in. A call matches by what its name refers to where it is made, so a name the
+    code binds itself, such as a parameter, hides a built-in of the same name.
+    """
+
     level_methods: Mapping[str, str] = field(
         default_factory=lambda: dict(_STANDARD_LEVEL_METHODS)
     )
@@ -115,7 +125,7 @@ class Config:
         """Build a configuration from a `[tool.birling]` table.
 
         The keys are the field names in kebab case. The recognition entries add to the
-        defaults, while `branches` replaces them.
+        defaults, while `branches` and `raising-functions` replace them.
 
         Args:
             table: The table, as read from `pyproject.toml`.
@@ -133,6 +143,9 @@ class Config:
         return cls(
             branches=_read_kinds(table, defaults.branches),
             ignore_exceptions=_read_names(table, "ignore-exceptions"),
+            raising_functions=_read_names(
+                table, "raising-functions", defaults.raising_functions
+            ),
             level_methods={**defaults.level_methods, **_read_levels(table, "level-methods")},
             logger_factories=defaults.logger_factories | _read_names(table, "logger-factories"),
             logger_modules=defaults.logger_modules | _read_names(table, "logger-modules"),
@@ -191,20 +204,23 @@ def _read_kinds(
     return frozenset(BranchKind(name) for name in names)
 
 
-def _read_names(table: Mapping[str, object], key: str) -> frozenset[str]:
+def _read_names(
+    table: Mapping[str, object], key: str, default: frozenset[str] = frozenset()
+) -> frozenset[str]:
     """Read a list of names.
 
     Args:
         table: The `[tool.birling]` table.
         key: The key of the list.
+        default: The names when the table leaves the key out.
 
     Returns:
-        The names; none when the table leaves the key out.
+        The names.
 
     Raises:
         ConfigError: When the value is not a list of strings.
     """
-    value = table.get(key, [])
+    value = table.get(key, list(default))
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
         raise ConfigError(key, "expected a list of strings")
     return frozenset(value)

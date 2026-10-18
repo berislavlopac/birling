@@ -126,6 +126,18 @@ def test_collect_units_finds_no_branch_in_a_block_that_always_runs_or_an_express
         ("continue", False),
         ("break", False),
         ("stop()", False),
+        ("sys.exit(1)", True),
+        ("exit()", True),
+        ("quit()", True),
+        ("assert_never(error)", True),
+        ("return assert_never(error)", True),
+        ("parser.exit(2, 'failed')", False),
+        ("server.quit()\nreturn False", False),
+        ("os._exit(1)", False),
+        ("log.error('failed')", False),
+        ("status = sys.exit", False),
+        ("if error.args:\n    sys.exit(1)\nreturn None", False),
+        ("if error.args:\n    sys.exit(1)\nraise", True),
         ("if error.args:\n    raise\nreturn None", False),
         ("if error.args:\n    return None\nraise", False),
         ("if error.args:\n    raise\nraise RuntimeError('failed')", True),
@@ -153,6 +165,8 @@ def test_a_branch_always_raises_when_every_path_through_it_does(handler, always_
     The handler's own branch comes first, before any branch nested in it.
     """
     source = (
+        "import sys\n"
+        "from typing import assert_never\n"
         "def run(items):\n"
         "    for item in items:\n"
         "        try:\n"
@@ -164,6 +178,211 @@ def test_a_branch_always_raises_when_every_path_through_it_does(handler, always_
 
     handler_branch = run.branches[0]
     assert handler_branch.always_raises is always_raises
+
+
+def test_a_call_raises_when_it_reaches_a_configured_raising_function_through_the_imports():
+    """A dotted name is reached through the module's imports, under an alias too.
+
+    A plain name stands for a built-in, unless an import binds it to something else.
+    """
+    source = dedent("""
+        import sys as system
+        from flask import abort
+        from pygame import quit
+        from sys import exit as leave
+
+        def handle(request):
+            try:
+                return respond(request)
+            except LookupError:
+                abort(404)
+            except OSError:
+                system.exit(1)
+            except ValueError:
+                leave(1)
+            except RuntimeError:
+                quit()
+    """)
+    config = Config(raising_functions=frozenset({"flask.abort", "sys.exit", "quit"}))
+
+    [handle] = collect_units(source, config)
+
+    assert [branch.always_raises for branch in handle.branches] == [True, True, True, False]
+
+
+def test_a_name_bound_in_the_code_hides_a_raising_function_of_the_same_name():
+    """A parameter, a function of the module's own and an assignment all hide one."""
+    source = dedent("""
+        import sys
+
+        def exit(code):
+            print(code)
+
+        def run(quit):
+            try:
+                work()
+            except OSError:
+                quit()
+            except ValueError:
+                exit(1)
+
+        def stop():
+            sys = load_settings()
+            try:
+                work()
+            except OSError:
+                sys.exit(1)
+    """)
+
+    units = collect_units(source, Config())
+
+    assert {unit.name: [b.always_raises for b in unit.branches] for unit in units} == {
+        "exit": [],
+        "run": [False, False],
+        "stop": [False],
+    }
+
+
+def test_a_name_is_resolved_in_the_scope_that_calls_it():
+    """An import in one function binds the name for it and for the functions nested in it.
+
+    A class body binds names for itself, not for its methods, as in Python.
+    """
+    source = dedent("""
+        from sys import exit
+
+        def setup():
+            from mylib import exit
+            try:
+                work()
+            except OSError:
+                exit(1)
+
+        def run():
+            try:
+                work()
+            except OSError:
+                exit(1)
+
+        def main():
+            from sys import exit as leave
+
+            def stop():
+                try:
+                    work()
+                except OSError:
+                    leave(1)
+
+        class Service:
+            exit = print
+
+            def stop(self):
+                try:
+                    work()
+                except OSError:
+                    exit(1)
+
+        def collect(items):
+            names = [exit for exit in items]
+            try:
+                work()
+            except OSError:
+                exit(1)
+    """)
+
+    units = collect_units(source, Config())
+
+    assert {unit.name: [b.always_raises for b in unit.branches] for unit in units} == {
+        "setup": [False],
+        "run": [True],
+        "main": [],
+        "main.stop": [True],
+        "Service.stop": [True],
+        "collect": [True],
+    }
+
+
+@pytest.mark.parametrize(
+    "imports",
+    [
+        "try:\n"
+        "    from typing import assert_never\n"
+        "except ImportError:\n"
+        "    from typing_extensions import assert_never\n",
+        "if sys.version_info >= (3, 11):\n"
+        "    from typing import assert_never\n"
+        "else:\n"
+        "    from typing_extensions import assert_never\n",
+    ],
+    ids=["try", "if"],
+)
+def test_a_name_imported_from_either_of_two_raising_functions_raises(imports):
+    source = imports + dedent("""
+        def run(value):
+            try:
+                check(value)
+            except ValueError:
+                assert_never(value)
+    """)
+
+    [run] = collect_units(source, Config())
+
+    assert run.branches[0].always_raises is True
+
+
+def test_a_name_imported_from_a_raising_and_a_returning_function_does_not_raise():
+    source = dedent("""
+        try:
+            from sys import exit
+        except ImportError:
+            from mylib import exit
+
+        def run():
+            try:
+                work()
+            except OSError:
+                exit(1)
+    """)
+
+    [run] = collect_units(source, Config())
+
+    assert run.branches[0].always_raises is False
+
+
+def test_a_built_in_raising_function_is_reached_through_the_builtins_module_too():
+    source = dedent("""
+        import builtins
+        from builtins import quit as stop
+
+        def run():
+            try:
+                work()
+            except OSError:
+                builtins.exit(1)
+            except ValueError:
+                stop()
+    """)
+
+    [run] = collect_units(source, Config())
+
+    assert [branch.always_raises for branch in run.branches] == [True, True]
+
+
+def test_an_awaited_call_to_a_raising_function_raises():
+    source = dedent("""
+        from app.errors import fail
+
+        async def handle(request):
+            try:
+                return await respond(request)
+            except LookupError:
+                await fail(404)
+    """)
+    config = Config(raising_functions=frozenset({"app.errors.fail"}))
+
+    [handle] = collect_units(source, config)
+
+    assert handle.branches[0].always_raises is True
 
 
 def test_an_elif_is_an_if_branch_and_an_if_in_an_else_is_both():
