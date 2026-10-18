@@ -14,10 +14,16 @@ birling needs Python 3.11 or later and has no dependencies of its own. Install i
 pip install birling
 ```
 
-To mark the gaps that ran in the tests, and find the logged branches where no log call ran, install the `coverage` extra, which brings in coverage.py:
+To mark the gaps that ran in the tests, and find the logged branches where no log call ran, birling reads coverage.py's data, which needs coverage.py where birling runs. It is usually there already where the tests run; the `coverage` extra installs it otherwise:
 
 ```shell
 pip install "birling[coverage]"
+```
+
+[uvx](https://docs.astral.sh/uv/guides/tools/) runs birling in an environment of its own, which does not see the project's, so add coverage.py to it:
+
+```shell
+uvx --with coverage birling shop --coverage-file .coverage
 ```
 
 ## Quick start

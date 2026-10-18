@@ -36,11 +36,16 @@ def test_read_executed_lines_rejects_a_file_that_is_not_coverage_data(tmp_path):
         read_executed_lines(data_file)
 
 
-def test_read_executed_lines_needs_the_coverage_extra(write_coverage_data, monkeypatch):
+def test_read_executed_lines_says_how_to_install_coverage_py_when_it_is_missing(
+    write_coverage_data, monkeypatch
+):
     data_file = write_coverage_data({})
     monkeypatch.setitem(sys.modules, "coverage", None)
 
     with pytest.raises(CoverageDataError) as raised:
         read_executed_lines(data_file)
 
-    assert str(raised.value) == f"{data_file}: reading it needs birling[coverage]"
+    assert str(raised.value) == (
+        f"{data_file}: coverage.py is not installed where birling runs;"
+        " install birling[coverage], or run `uvx --with coverage birling`"
+    )

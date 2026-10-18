@@ -1,4 +1,4 @@
-"""Reading which lines ran from coverage.py's data, which needs the `coverage` extra."""
+"""Reading which lines ran from coverage.py's data, which needs coverage.py installed."""
 
 from pathlib import Path
 
@@ -32,7 +32,11 @@ def read_executed_lines(data_file: Path) -> dict[Path, frozenset[int]]:
         from coverage import CoverageData
         from coverage.exceptions import DataError
     except ImportError as error:
-        raise CoverageDataError(data_file, "reading it needs birling[coverage]") from error
+        problem = (
+            "coverage.py is not installed where birling runs; install birling[coverage],"
+            " or run `uvx --with coverage birling`"
+        )
+        raise CoverageDataError(data_file, problem) from error
     if not data_file.is_file():
         raise CoverageDataError(data_file, "no such file")
     data = CoverageData(str(data_file))

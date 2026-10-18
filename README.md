@@ -22,7 +22,7 @@ birling needs Python 3.11 or later and has no dependencies of its own. Install i
 pip install birling
 ```
 
-The `coverage` extra, `birling[coverage]`, adds coverage.py, which the command needs to mark the unlogged branches that ran in the tests and to find the logged branches where no log call ran.
+To mark the unlogged branches that ran in the tests, and to find the logged branches where no log call ran, the command reads coverage.py's data, which needs coverage.py where birling runs. It is usually there already where the tests run; the `coverage` extra, `birling[coverage]`, installs it otherwise.
 
 ## Usage
 

@@ -14,7 +14,7 @@ A directory is searched for `.py` files, skipping hidden directories and virtual
 |---|---|
 | `--config FILE` | The `pyproject.toml` to read the `[tool.birling]` table from. By default, `pyproject.toml` in the current directory is read if there is one. |
 | `--fail-under SCORE` | Exit with status 1 when the total score is below `SCORE`, overriding `fail-under` in the configuration. |
-| `--coverage-file FILE` | [coverage.py](https://coverage.readthedocs.io/)'s data from a test run, to mark the unlogged branches that ran and count the logged branches where no log call ran. Needs the `coverage` extra. |
+| `--coverage-file FILE` | [coverage.py](https://coverage.readthedocs.io/)'s data from a test run, to mark the unlogged branches that ran and count the logged branches where no log call ran. Needs coverage.py where birling runs; see [Coverage data](#coverage-data). |
 | `--show-unlogged` | After the report, list each unlogged branch on a line of its own. |
 | `--show-unrun-logs` | After the report, list each logged branch whose log calls never ran in the tests on a line of its own. Needs `--coverage-file`. |
 | `--version` | Show the version. |
@@ -97,6 +97,8 @@ no log call ran in the tests: 1 of 2 logged branches in the coverage data
 
 With [pytest-cov](https://pytest-cov.readthedocs.io/), `pytest --cov=shop` writes the same `.coverage` file. The data does not change the score.
 
+Reading the data needs coverage.py where birling runs. When birling is installed alongside the tests, as a development dependency, coverage.py is usually there already. `uvx` and `pipx` run birling in an environment of their own, which does not see the project's: add coverage.py to it with `uvx --with coverage birling ...`, or install `birling[coverage]` there.
+
 A branch counts as having run when its first statement ran. birling finds a module in the data by its full path on disk, so the data has to come from a test run in the same checkout. Data combined from runs elsewhere, through coverage.py's `[paths]` setting, records other paths and is not matched.
 
 The data also shows the logged branches where no log call ran in the tests, so their log calls are untested: a mistake in one, such as a wrong argument, shows only when the branch runs for real. The last line of the report counts them, and `--show-unrun-logs` lists them:
@@ -133,6 +135,6 @@ print(to_listing(measurements, executed))
 print(to_unrun_listing(measurements, executed))
 ```
 
-`read_executed_lines()` reads the coverage data, and needs the `coverage` extra. Without it, `to_text()` and `to_listing()` take the measurements alone; `to_unrun_listing()` always needs the data.
+`read_executed_lines()` reads the coverage data, and needs coverage.py installed. Without it, `to_text()` and `to_listing()` take the measurements alone; `to_unrun_listing()` always needs the data.
 
 `measure_paths()` returns a `Measurement` for each module, by path. A `Measurement` lists every function and method with the branches that should log, and gives `branch_count`, `logged_count` and `score`; `Measurement.combine()` adds measurements up. `measure_source()` measures a module's source given as a string. See the [API reference](reference.md) for the details.
