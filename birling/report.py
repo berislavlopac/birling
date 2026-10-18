@@ -9,6 +9,12 @@ from birling.measurement import Measurement
 
 _HEADER = "Branches  Logged  Score  Unlogged"
 
+# What each kind of finding means, after its code in a listing.
+_MESSAGES = {
+    FindingKind.UNLOGGED: "no log call",
+    FindingKind.UNRUN_LOG: "no log call ran in the tests",
+}
+
 
 def to_text(
     measurements: Mapping[Path, Measurement],
@@ -60,8 +66,8 @@ def to_listing(
 ) -> str:
     """Return a line for each branch that should log but does not.
 
-    Each line reads `path:line: unit: branch`, which editors and CI logs turn into a link,
-    in the order of the modules and of the branches' lines.
+    Each line reads `path:line: BRL001 no log call: unit: branch`, which editors and CI logs
+    turn into a link, in the order of the modules and of the branches' lines.
 
     Args:
         measurements: The measurement of each module, by path.
@@ -77,7 +83,7 @@ def to_listing(
         names = _find_unit_names(measurement)
         for branch in _find_unlogged(measurement):
             mark = " (ran in the tests)" if branch.body_line in ran else ""
-            lines.append(_to_entry(path, names[branch], branch, mark))
+            lines.append(_to_entry(path, FindingKind.UNLOGGED, names[branch], branch, mark))
     return "".join(lines)
 
 
@@ -86,8 +92,9 @@ def to_unrun_listing(
 ) -> str:
     """Return a line for each branch that should log and does, but whose log calls never ran.
 
-    The lines read as those of `to_listing`. A module the coverage data does not hold is left
-    out, since it cannot be told from one whose paths in the data were remapped.
+    The lines read as those of `to_listing`, with the code `BRL002`. A module the coverage
+    data does not hold is left out, since it cannot be told from one whose paths in the data
+    were remapped.
 
     Args:
         measurements: The measurement of each module, by path.
@@ -97,11 +104,12 @@ def to_unrun_listing(
         The listing, a line per branch; empty when a log call ran in every logged branch.
     """
     lines = []
-    mark = " (no log call ran in the tests)"
     for path, measurement in measurements.items():
         names = _find_unit_names(measurement)
         unrun = _find_unrun(path, measurement, executed)
-        lines.extend(_to_entry(path, names[branch], branch, mark) for branch in unrun)
+        lines.extend(
+            _to_entry(path, FindingKind.UNRUN_LOG, names[branch], branch) for branch in unrun
+        )
     return "".join(lines)
 
 
@@ -185,11 +193,14 @@ def _find_unit_names(measurement: Measurement) -> dict[Branch, str]:
     return {branch: unit.unit.name for unit in measurement.units for branch in unit.branches}
 
 
-def _to_entry(path: Path, unit_name: str, branch: Branch, mark: str) -> str:
-    """Format a branch as a line of a listing, `path:line: unit: branch` and the mark.
+def _to_entry(
+    path: Path, finding: FindingKind, unit_name: str, branch: Branch, mark: str = ""
+) -> str:
+    """Format a finding as a line of a listing, `path:line: code message: unit: branch`.
 
     Args:
         path: The module's path.
+        finding: The kind of finding.
         unit_name: The name of the branch's unit.
         branch: The branch.
         mark: What to add at the end of the line, if anything.
@@ -198,7 +209,8 @@ def _to_entry(path: Path, unit_name: str, branch: Branch, mark: str) -> str:
         The line, with its line break.
     """
     what = f"{branch.kind} {branch.condition}".rstrip()
-    return f"{path}:{branch.line}: {unit_name}: {what}{mark}\n"
+    found = f"{finding} {_MESSAGES[finding]}"
+    return f"{path}:{branch.line}: {found}: {unit_name}: {what}{mark}\n"
 
 
 def _to_row(name: str, measurement: Measurement, width: int, unlogged: str) -> str:

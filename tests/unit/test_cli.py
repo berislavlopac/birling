@@ -161,7 +161,8 @@ def test_main_lists_each_unlogged_branch_after_the_report_when_asked(project, ca
 
     assert status == 0
     assert capsys.readouterr().out.endswith(
-        "TOTAL                  2       1    50%\n\napp/service.py:10: load: except PermissionError\n"
+        "TOTAL                  2       1    50%\n\n"
+        "app/service.py:10: BRL001 no log call: load: except PermissionError\n"
     )
 
 
@@ -184,7 +185,8 @@ def test_main_lists_each_logged_branch_whose_log_calls_never_ran_when_asked(
     assert status == 0
     assert capsys.readouterr().out.endswith(
         "logged branches in the coverage data\n\n"
-        "app/service.py:7: load: except FileNotFoundError (no log call ran in the tests)\n"
+        "app/service.py:7: BRL002 no log call ran in the tests: "
+        "load: except FileNotFoundError\n"
     )
 
 

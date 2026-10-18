@@ -41,15 +41,15 @@ Only modules with at least one branch that should log get a row. The score depen
 
 ## Listing the unlogged branches
 
-With `--show-unlogged`, each unlogged branch gets a line of its own after the report, naming its unit and how the branch is selected. Editors and CI logs turn the `path:line` at its start into a link:
+With `--show-unlogged`, each unlogged branch gets a line of its own after the report, with the code of the finding, `BRL001`, its unit and how the branch is selected. Editors and CI logs turn the `path:line` at its start into a link:
 
 ```text
 $ birling shop --show-unlogged
 ...
 TOTAL                    4       2    50%
 
-shop/orders.py:12: load_order: except TimeoutError
-shop/payments.py:12: charge: except ValueError
+shop/orders.py:12: BRL001 no log call: load_order: except TimeoutError
+shop/payments.py:12: BRL001 no log call: charge: except ValueError
 ```
 
 With `--coverage-file`, a branch that ran in the tests is marked `(ran in the tests)`.
@@ -93,7 +93,7 @@ $ birling shop --coverage-file .coverage --show-unrun-logs
 ...
 no log call ran in the tests: 1 of 2 logged branches in the coverage data
 
-shop/payments.py:9: charge: except TimeoutError (no log call ran in the tests)
+shop/payments.py:9: BRL002 no log call ran in the tests: charge: except TimeoutError
 ```
 
 A log call counts as having run when its line ran, even if that line skipped it, as a conditional expression can. A `# noqa: BRL002` comment on the line that opens a branch leaves it out of this check, as described in [accepting a branch without a log](how-it-works.md#accepting-a-branch-without-a-log). A module the data does not hold is left out of the count and the listing, since it cannot be told from one whose paths were remapped.

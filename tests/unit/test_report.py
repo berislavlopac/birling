@@ -148,7 +148,7 @@ def test_to_listing_gives_a_line_for_each_branch_that_should_log_but_does_not():
         def load(path):
             try:
                 return read(path)
-            except (FileNotFoundError, IsADirectoryError):
+            except (KeyError, OSError):
                 return None
 
         def save(path):
@@ -165,8 +165,8 @@ def test_to_listing_gives_a_line_for_each_branch_that_should_log_but_does_not():
     listing = to_listing(measurements)
 
     assert listing == dedent("""\
-        app/service.py:5: load: except (FileNotFoundError, IsADirectoryError)
-        app/service.py:11: save: except
+        app/service.py:5: BRL001 no log call: load: except (KeyError, OSError)
+        app/service.py:11: BRL001 no log call: save: except
     """)
 
 
@@ -186,8 +186,8 @@ def test_to_listing_marks_the_branches_that_ran_in_the_tests():
     listing = to_listing({module: measure_source(source)}, executed)
 
     assert listing == dedent("""\
-        app/service.py:5: load: except FileNotFoundError (ran in the tests)
-        app/service.py:7: load: except PermissionError
+        app/service.py:5: BRL001 no log call: load: except FileNotFoundError (ran in the tests)
+        app/service.py:7: BRL001 no log call: load: except PermissionError
     """)
 
 
@@ -258,8 +258,8 @@ def test_to_unrun_listing_gives_a_line_for_each_logged_branch_whose_log_calls_ne
     listing = to_unrun_listing({module: measure_source(source)}, executed)
 
     assert listing == dedent("""\
-        app/service.py:9: load: except PermissionError (no log call ran in the tests)
-        app/service.py:15: save: except OSError (no log call ran in the tests)
+        app/service.py:9: BRL002 no log call ran in the tests: load: except PermissionError
+        app/service.py:15: BRL002 no log call ran in the tests: save: except OSError
     """)
 
 
@@ -298,7 +298,9 @@ def test_to_unrun_listing_lists_a_branch_that_ran_but_left_before_its_log_call()
 
     listing = to_unrun_listing({module: measure_source(source)}, executed)
 
-    assert listing == "app/service.py:7: load: except OSError (no log call ran in the tests)\n"
+    assert listing == (
+        "app/service.py:7: BRL002 no log call ran in the tests: load: except OSError\n"
+    )
 
 
 def test_to_unrun_listing_leaves_out_a_branch_where_any_of_its_log_calls_ran():
