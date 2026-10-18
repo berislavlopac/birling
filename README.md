@@ -53,4 +53,4 @@ The lumberjacks' sport lends its name to a tool for keeping on top of a project'
 
 ## Status
 
-birling is experimental: its interface may change before the first release.
+birling is in alpha: its interface may change from one release to the next.
