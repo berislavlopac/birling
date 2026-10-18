@@ -8,6 +8,19 @@ Unreleased changes are kept as news fragments in `release-notes/`, and collated 
 
 <!-- towncrier release notes start -->
 
+## [0.2.0] - 2026-10-18
+
+### Breaking Changes
+
+- Each line of the `--show-unlogged` listing starts with the code of the finding and what it means, as in `BRL001 no log call`.
+- The `# birling: ignore` comment is replaced by `# noqa: BRL001`, in the form linters use; `# noqa: BRL002` leaves a branch out of the check for log calls that never ran.
+
+### Added
+
+- A branch that ends in a call to a function that always raises, such as `sys.exit()`, counts as raising; the functions are set in `raising-functions`.
+- With `--coverage-file`, the report counts the logged branches where no log call ran in the tests, and `--show-unrun-logs` lists them.
+
+
 ## [0.1.0] - 2026-10-13
 
 ### Added
