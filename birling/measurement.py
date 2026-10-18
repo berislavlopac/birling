@@ -38,6 +38,11 @@ class UnitMeasurement:
         """The branches that should log but hold no log call."""
         return tuple(branch for branch in self.branches if not branch.is_logged)
 
+    @property
+    def logged(self) -> tuple[Branch, ...]:
+        """The branches that should log and hold a log call."""
+        return tuple(branch for branch in self.branches if branch.is_logged)
+
 
 @dataclass(frozen=True)
 class Measurement:

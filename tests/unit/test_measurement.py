@@ -292,6 +292,33 @@ def test_a_unit_measurement_lists_the_branches_that_should_log_but_do_not():
     assert branches == (unlogged,)
 
 
+def test_a_unit_measurement_lists_the_branches_that_should_log_and_do():
+    unlogged = Branch(
+        kind=BranchKind.EXCEPT,
+        line=3,
+        body_line=4,
+        condition="TimeoutError",
+        exceptions=("TimeoutError",),
+        always_raises=False,
+        log_calls=(),
+    )
+    logged = Branch(
+        kind=BranchKind.EXCEPT,
+        line=5,
+        body_line=6,
+        condition="ConnectionError",
+        exceptions=("ConnectionError",),
+        always_raises=False,
+        log_calls=(LogCall(line=6, level="warning"),),
+    )
+    unit = Unit(name="handle", line=1, branches=(unlogged, logged), log_calls=logged.log_calls)
+    unit_measurement = UnitMeasurement(unit=unit, branches=(unlogged, logged))
+
+    branches = unit_measurement.logged
+
+    assert branches == (logged,)
+
+
 def test_measure_paths_measures_every_module_of_the_standard_library():
     """Every unit measured holds together, whatever the code.
 

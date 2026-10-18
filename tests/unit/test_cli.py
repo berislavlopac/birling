@@ -143,6 +143,7 @@ def test_main_marks_the_unlogged_branches_that_ran_from_the_coverage_data(
         TOTAL                  2       1    50%
 
         * ran in the tests: 1 of 1 unlogged branches
+        no log call ran in the tests: 1 of 1 logged branches in the coverage data
     """)
 
 
@@ -171,6 +172,30 @@ def test_main_lists_nothing_when_every_branch_that_should_log_does(project, caps
 
     assert status == 0
     assert capsys.readouterr().out.endswith("TOTAL         0       0   100%\n")
+
+
+def test_main_lists_each_logged_branch_whose_log_calls_never_ran_when_asked(
+    project, write_coverage_data, capsys
+):
+    data_file = write_coverage_data({project / "app/service.py": [2, 4, 5, 6, 10, 11]})
+
+    status = main(["app", "--coverage-file", str(data_file), "--show-unrun-logs"])
+
+    assert status == 0
+    assert capsys.readouterr().out.endswith(
+        "logged branches in the coverage data\n\n"
+        "app/service.py:7: load: except FileNotFoundError (no log call ran in the tests)\n"
+    )
+
+
+def test_main_rejects_listing_the_log_calls_that_never_ran_without_coverage_data(
+    project, capsys
+):
+    with pytest.raises(SystemExit) as raised:
+        main(["app", "--show-unrun-logs"])
+
+    assert raised.value.code == 2
+    assert "--show-unrun-logs needs --coverage-file" in capsys.readouterr().err
 
 
 def test_main_rejects_a_call_without_paths(capsys):

@@ -14,7 +14,7 @@ birling needs Python 3.11 or later and has no dependencies of its own. Install i
 pip install birling
 ```
 
-To mark the gaps that ran in the tests, install the `coverage` extra, which brings in coverage.py:
+To mark the gaps that ran in the tests, and find the logged branches where no log call ran, install the `coverage` extra, which brings in coverage.py:
 
 ```shell
 pip install "birling[coverage]"

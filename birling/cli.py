@@ -9,7 +9,7 @@ from pathlib import Path
 from birling import __version__
 from birling.config import Config, ConfigError
 from birling.measurement import Measurement, MeasurementError, measure_paths
-from birling.report import to_listing, to_text
+from birling.report import to_listing, to_text, to_unrun_listing
 from birling.runtime import CoverageDataError, read_executed_lines
 
 # Read when present and no other file is named.
@@ -29,7 +29,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         The exit status: 1 when the total score is below the minimum, 2 when the
         configuration, a module or the coverage data cannot be read, and 0 otherwise.
     """
-    arguments = _to_parser().parse_args(argv)
+    parser = _to_parser()
+    arguments = parser.parse_args(argv)
+    if arguments.show_unrun_logs and not arguments.coverage_file:
+        parser.error("--show-unrun-logs needs --coverage-file")
     pyproject = arguments.config or (_PYPROJECT if _PYPROJECT.exists() else None)
     try:
         config = Config.from_pyproject(pyproject) if pyproject else Config()
@@ -47,6 +50,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _fail(f"cannot read the coverage data in {error}")
     print(to_text(measurements, executed), end="")
     if arguments.show_unlogged and (listing := to_listing(measurements, executed)):
+        print(f"\n{listing}", end="")
+    if (
+        arguments.show_unrun_logs
+        and executed is not None
+        and (listing := to_unrun_listing(measurements, executed))
+    ):
         print(f"\n{listing}", end="")
     fail_under = config.fail_under if arguments.fail_under is None else arguments.fail_under
     score = Measurement.combine(measurements.values()).score
@@ -85,12 +94,18 @@ def _to_parser() -> argparse.ArgumentParser:
         "--coverage-file",
         type=Path,
         metavar="FILE",
-        help="coverage.py's data from a test run, to mark the unlogged branches that ran",
+        help="coverage.py's data from a test run, to mark the unlogged branches that ran"
+        " and count the logged branches where no log call ran",
     )
     parser.add_argument(
         "--show-unlogged",
         action="store_true",
         help="list each unlogged branch after the report, as path:line",
+    )
+    parser.add_argument(
+        "--show-unrun-logs",
+        action="store_true",
+        help="list each logged branch whose log calls never ran; needs --coverage-file",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser

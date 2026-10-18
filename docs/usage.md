@@ -3,7 +3,7 @@
 ## The command
 
 ```shell
-birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged]
+birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged] [--show-unrun-logs]
 ```
 
 The command measures the modules and directories given and prints a report. It also runs as `python -m birling`.
@@ -14,8 +14,9 @@ A directory is searched for `.py` files, skipping hidden directories and virtual
 |---|---|
 | `--config FILE` | The `pyproject.toml` to read the `[tool.birling]` table from. By default, `pyproject.toml` in the current directory is read if there is one. |
 | `--fail-under SCORE` | Exit with status 1 when the total score is below `SCORE`, overriding `fail-under` in the configuration. |
-| `--coverage-file FILE` | [coverage.py](https://coverage.readthedocs.io/)'s data from a test run, to mark the unlogged branches that ran. Needs the `coverage` extra. |
+| `--coverage-file FILE` | [coverage.py](https://coverage.readthedocs.io/)'s data from a test run, to mark the unlogged branches that ran and count the logged branches where no log call ran. Needs the `coverage` extra. |
 | `--show-unlogged` | After the report, list each unlogged branch on a line of its own. |
+| `--show-unrun-logs` | After the report, list each logged branch whose log calls never ran in the tests on a line of its own. Needs `--coverage-file`. |
 | `--version` | Show the version. |
 
 ## The report
@@ -78,11 +79,24 @@ shop/payments.py         2       1    50%  12
 TOTAL                    4       2    50%
 
 * ran in the tests: 1 of 2 unlogged branches
+no log call ran in the tests: 1 of 2 logged branches in the coverage data
 ```
 
 With [pytest-cov](https://pytest-cov.readthedocs.io/), `pytest --cov=shop` writes the same `.coverage` file. The data does not change the score.
 
 A branch counts as having run when its first statement ran. Modules are matched to the data by their resolved paths, so data whose paths were remapped, as with `coverage combine` and its `[paths]` setting, does not match.
+
+The data also shows the logged branches where no log call ran in the tests, so their log calls are untested: a mistake in one, such as a wrong argument, shows only when the branch runs for real. The last line of the report counts them, and `--show-unrun-logs` lists them:
+
+```text
+$ birling shop --coverage-file .coverage --show-unrun-logs
+...
+no log call ran in the tests: 1 of 2 logged branches in the coverage data
+
+shop/payments.py:9: charge: except TimeoutError (no log call ran in the tests)
+```
+
+A log call counts as having run when its line ran, even if that line skipped it, as a conditional expression can. A module the data does not hold is left out of the count and the listing, since it cannot be told from one whose paths were remapped.
 
 ## From Python
 

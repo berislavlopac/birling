@@ -22,12 +22,12 @@ birling needs Python 3.11 or later and has no dependencies of its own. Install i
 pip install birling
 ```
 
-The `coverage` extra, `birling[coverage]`, adds coverage.py, which the command needs to mark the unlogged branches that ran in the tests.
+The `coverage` extra, `birling[coverage]`, adds coverage.py, which the command needs to mark the unlogged branches that ran in the tests and to find the logged branches where no log call ran.
 
 ## Usage
 
 ```shell
-birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged]
+birling PATH... [--config FILE] [--fail-under SCORE] [--coverage-file FILE] [--show-unlogged] [--show-unrun-logs]
 ```
 
 The command reads its configuration from the `[tool.birling]` table of `pyproject.toml`, and exits with status 1 when the score is below the minimum:
