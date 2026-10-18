@@ -8,6 +8,13 @@ Unreleased changes are kept as news fragments in `release-notes/`, and collated 
 
 <!-- towncrier release notes start -->
 
+## [0.2.1] - 2026-10-18
+
+### Fixed
+
+- When coverage.py is not installed where birling runs, as under `uvx`, the error says how to add it, rather than only naming the `coverage` extra.
+
+
 ## [0.2.0] - 2026-10-18
 
 ### Breaking Changes
