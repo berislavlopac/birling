@@ -24,6 +24,10 @@
 
 ::: birling.report.to_text
 
+::: birling.report.to_listing
+
+::: birling.report.to_unrun_listing
+
 ::: birling.runtime.read_executed_lines
 
 ::: birling.runtime.CoverageDataError
