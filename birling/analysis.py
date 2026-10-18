@@ -4,6 +4,7 @@ import ast
 import re
 from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from itertools import chain
 from typing import NamedTuple
 
@@ -23,8 +24,21 @@ MODULE_UNIT_NAME = "<module>"
 # The kinds of branch opened by an `else:`, whose line the syntax tree does not record.
 _ELSE_KINDS = frozenset({BranchKind.ELSE, BranchKind.TRY_ELSE, BranchKind.LOOP_ELSE})
 
-# The comment that accepts a branch without a log call, on the line that opens it.
-_IGNORE_COMMENT = re.compile(r"#\s*birling:\s*ignore\b")
+# A noqa comment with a list of codes, as linters read it: the keyword in any case, the
+# codes in capitals.
+_NOQA_COMMENT = re.compile(
+    r"#\s*(?i:noqa)\s*:\s*(?P<codes>[A-Z]+[0-9]+(?:[\s,]+[A-Z]+[0-9]+)*)"
+)
+
+
+class FindingKind(StrEnum):
+    """A kind of finding, by the code that names it in reports and `# noqa` comments."""
+
+    UNLOGGED = "BRL001"
+    """A branch that should log holds no log call."""
+
+    UNRUN_LOG = "BRL002"
+    """A branch that should log holds log calls, but none of them ran in the tests."""
 
 
 @dataclass(frozen=True)
@@ -61,8 +75,8 @@ class Branch:
     Those in lambdas are included only when the configuration says so.
     """
 
-    has_ignore_comment: bool = False
-    """Whether the line that opens the branch carries a `# birling: ignore` comment."""
+    ignored: frozenset[FindingKind] = frozenset()
+    """The kinds of finding accepted by a `# noqa` comment on the line that opens the branch."""
 
     @property
     def is_logged(self) -> bool:
@@ -131,9 +145,30 @@ def _place_branches(unit: Unit, layout: Layout) -> Unit:
         line = branch.line
         if branch.kind in _ELSE_KINDS:
             line = layout.find_else_line(branch.body_line)
-        ignored = bool(_IGNORE_COMMENT.search(layout.comments.get(line, "")))
-        branches.append(replace(branch, line=line, has_ignore_comment=ignored))
+        ignored = _find_ignored(layout.comments.get(line, ""))
+        branches.append(replace(branch, line=line, ignored=ignored))
     return replace(unit, branches=tuple(sorted(branches, key=lambda branch: branch.line)))
+
+
+def _find_ignored(comment: str) -> frozenset[FindingKind]:
+    """Return the kinds of finding that a line's `# noqa` comment accepts.
+
+    Codes birling does not have are skipped, as linters skip them, so a mistyped code leaves
+    its finding in the report. A `# noqa` without codes accepts nothing: on a line that opens
+    a branch, it is usually meant for a linter.
+
+    Args:
+        comment: The line's comment; empty when it has none.
+
+    Returns:
+        The kinds of finding whose codes the comment lists.
+    """
+    match = _NOQA_COMMENT.search(comment)
+    if not match:
+        return frozenset()
+    known = set(FindingKind)
+    codes = re.split(r"[\s,]+", match["codes"])
+    return frozenset(FindingKind(code) for code in codes if code in known)
 
 
 _Definition = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef

@@ -96,7 +96,7 @@ no log call ran in the tests: 1 of 2 logged branches in the coverage data
 shop/payments.py:9: charge: except TimeoutError (no log call ran in the tests)
 ```
 
-A log call counts as having run when its line ran, even if that line skipped it, as a conditional expression can. A module the data does not hold is left out of the count and the listing, since it cannot be told from one whose paths were remapped.
+A log call counts as having run when its line ran, even if that line skipped it, as a conditional expression can. A `# noqa: BRL002` comment on the line that opens a branch leaves it out of this check, as described in [accepting a branch without a log](how-it-works.md#accepting-a-branch-without-a-log). A module the data does not hold is left out of the count and the listing, since it cannot be told from one whose paths were remapped.
 
 ## From Python
 

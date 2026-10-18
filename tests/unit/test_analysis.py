@@ -2,7 +2,13 @@ from textwrap import dedent, indent
 
 import pytest
 
-from birling.analysis import MODULE_UNIT_NAME, Branch, Unit, collect_units
+from birling.analysis import (
+    MODULE_UNIT_NAME,
+    Branch,
+    FindingKind,
+    Unit,
+    collect_units,
+)
 from birling.config import BranchKind, Config
 from birling.recognition import LogCall
 
@@ -217,26 +223,61 @@ def test_a_branch_opens_on_its_if_case_except_or_else_line():
     ]
 
 
-def test_a_branch_is_marked_by_an_ignore_comment_on_the_line_that_opens_it():
+def test_a_branch_accepts_the_codes_of_a_noqa_comment_on_the_line_that_opens_it():
     source = dedent("""
         def load(path, cache):
             try:
                 return read(path)
-            except KeyError:  # birling: ignore
+            except KeyError:  # noqa: BRL001
                 return None
             except OSError:
-                return None  # birling: ignore
-            else:  # birling: ignore
+                return None  # noqa: BRL001
+            else:  # noqa: BRL002
                 cache.add(path)
     """)
 
     [load] = collect_units(source, Config())
 
-    assert [(b.kind, b.has_ignore_comment) for b in load.branches] == [
-        (BranchKind.EXCEPT, True),
-        (BranchKind.EXCEPT, False),
-        (BranchKind.TRY_ELSE, True),
+    assert [(b.kind, b.ignored) for b in load.branches] == [
+        (BranchKind.EXCEPT, frozenset({FindingKind.UNLOGGED})),
+        (BranchKind.EXCEPT, frozenset()),
+        (BranchKind.TRY_ELSE, frozenset({FindingKind.UNRUN_LOG})),
     ]
+
+
+@pytest.mark.parametrize(
+    ("comment", "ignored"),
+    [
+        ("# noqa: BRL001, BRL002", {FindingKind.UNLOGGED, FindingKind.UNRUN_LOG}),
+        ("# NOQA:BLE001,BRL002", {FindingKind.UNRUN_LOG}),
+        ("# noqa: BLE001", set()),
+        ("# noqa: BRL009, BRLX01", set()),
+        ("# noqa: brl001", set()),
+        ("# noqa", set()),
+    ],
+    ids=[
+        "codes",
+        "other tools' codes",
+        "only other tools' codes",
+        "unknown codes",
+        "lowercase code",
+        "no codes",
+    ],
+)
+def test_a_noqa_comment_accepts_only_the_kinds_of_finding_whose_codes_it_lists(
+    comment, ignored
+):
+    source = dedent(f"""
+        def load(path):
+            try:
+                return read(path)
+            except Exception:  {comment}
+                return None
+    """)
+
+    [load] = collect_units(source, Config())
+
+    assert load.branches[0].ignored == ignored
 
 
 @pytest.mark.parametrize(

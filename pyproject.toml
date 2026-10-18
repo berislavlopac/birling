@@ -133,6 +133,7 @@ ignore = [
 ]
 external = [
     "F841",     # vulture uses this code for ignoring unused names
+    "BRL",      # birling's own codes, for accepting a branch without a log
 ]
 
 [tool.ruff.lint.pydocstyle]

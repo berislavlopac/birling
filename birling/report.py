@@ -4,7 +4,7 @@ import math
 from collections.abc import Mapping
 from pathlib import Path
 
-from birling.analysis import Branch
+from birling.analysis import Branch, FindingKind
 from birling.measurement import Measurement
 
 _HEADER = "Branches  Logged  Score  Unlogged"
@@ -132,7 +132,7 @@ def _find_unlogged(measurement: Measurement) -> list[Branch]:
 
 
 def _find_logged(measurement: Measurement) -> list[Branch]:
-    """Return a module's branches that should log and do.
+    """Return a module's branches that should log and do, unless accepted for `BRL002`.
 
     Args:
         measurement: The module's measurement.
@@ -140,7 +140,12 @@ def _find_logged(measurement: Measurement) -> list[Branch]:
     Returns:
         The branches, in the order of their lines.
     """
-    branches = (branch for unit in measurement.units for branch in unit.logged)
+    branches = (
+        branch
+        for unit in measurement.units
+        for branch in unit.logged
+        if FindingKind.UNRUN_LOG not in branch.ignored
+    )
     return sorted(branches, key=lambda branch: branch.line)
 
 

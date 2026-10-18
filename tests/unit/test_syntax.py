@@ -111,7 +111,7 @@ def test_to_layout_finds_the_comments_and_the_else_that_opens_a_block():
     source = dedent("""
         if ready:
             value = start() if ready else stop()
-        else:  # birling: ignore
+        else:  # noqa: BRL001
             value = None
         for item in items:
             pass  # nothing to do
@@ -121,7 +121,7 @@ def test_to_layout_finds_the_comments_and_the_else_that_opens_a_block():
     layout = to_layout(source)
 
     assert layout == Layout(
-        else_lines=(4, 8), comments={4: "# birling: ignore", 7: "# nothing to do"}
+        else_lines=(4, 8), comments={4: "# noqa: BRL001", 7: "# nothing to do"}
     )
 
 

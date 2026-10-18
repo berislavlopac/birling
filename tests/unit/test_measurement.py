@@ -143,18 +143,32 @@ def test_a_handler_that_raises_on_only_some_paths_should_log():
     assert measurement.branch_count == 1
 
 
-def test_a_branch_accepted_by_an_ignore_comment_need_not_log():
+def test_a_branch_accepted_for_brl001_need_not_log():
     source = dedent("""
         def lookup(cache, key):
             try:
                 return cache[key]
-            except LookupError:  # birling: ignore
+            except LookupError:  # noqa: BRL001
                 return None
     """)
 
     measurement = measure_source(source)
 
     assert measurement.branch_count == 0
+
+
+def test_a_branch_accepted_only_for_brl002_still_should_log():
+    source = dedent("""
+        def lookup(cache, key):
+            try:
+                return cache[key]
+            except LookupError:  # noqa: BRL002
+                return None
+    """)
+
+    measurement = measure_source(source)
+
+    assert measurement.branch_count == 1
 
 
 @pytest.mark.parametrize(

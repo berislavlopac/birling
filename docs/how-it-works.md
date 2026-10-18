@@ -35,14 +35,30 @@ A branch counts as raising only when every path through it raises. A handler tha
 
 Some branches rightly do not log, such as `except KeyError: return default`. There are two ways to accept them, and an accepted branch drops out of the count.
 
-A `# birling: ignore` comment on the line that opens the branch accepts that branch:
+A `# noqa: BRL001` comment on the line that opens the branch accepts that branch:
 
 ```python
 try:
     return cache[key]
-except KeyError:  # birling: ignore
+except KeyError:  # noqa: BRL001
     return default
 ```
+
+The comment takes the form linters use, so one comment can hold the codes of several tools, as in `# noqa: BLE001, BRL001`. birling reads only its own codes, written in capitals, and skips any other code as linters do, so a mistyped code leaves its finding in the report. A `# noqa` without codes accepts nothing, since on such a line it is usually meant for a linter. A project that has ruff report unknown codes in these comments (rule `RUF102`) declares birling's codes to it:
+
+```toml
+[tool.ruff.lint]
+external = ["BRL"]
+```
+
+Each kind of finding has a code:
+
+| Code | Finding |
+|---|---|
+| `BRL001` | A branch that should log holds no log call. |
+| `BRL002` | A branch that should log holds log calls, but none of them ran in the tests. Needs [coverage data](usage.md#coverage-data). |
+
+A branch accepted for `BRL001` drops out of the count, and so out of `BRL002` as well, which checks only the branches that should log. A branch accepted only for `BRL002` still counts.
 
 The `ignore-exceptions` list in the [configuration](configuration.md#what-should-log) accepts every handler that catches only the exceptions it names. A bare `except` catches everything, so the list cannot accept it.
 

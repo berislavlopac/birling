@@ -40,6 +40,8 @@
 
 ::: birling.analysis.Branch
 
+::: birling.analysis.FindingKind
+
 ## Recognition
 
 ::: birling.recognition.recognise

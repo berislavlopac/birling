@@ -207,6 +207,33 @@ def test_to_listing_is_empty_when_every_branch_that_should_log_does():
     assert listing == ""
 
 
+def test_to_text_leaves_a_branch_accepted_for_brl002_out_of_the_logged_branches_counted():
+    source = dedent("""
+        import logging
+
+        def load(path):
+            try:
+                return read(path)
+            except OSError:  # noqa: BRL002
+                logging.exception("cannot read %s", path)
+    """)
+    module = Path("app/service.py")
+    executed = {module.resolve(): frozenset({5, 6})}
+
+    text = to_text({module: measure_source(source)}, executed)
+
+    assert text == dedent("""\
+        Name            Branches  Logged  Score  Unlogged
+        -------------------------------------------------
+        app/service.py         1       1   100%
+        -------------------------------------------------
+        TOTAL                  1       1   100%
+
+        * ran in the tests: 0 of 0 unlogged branches
+        no log call ran in the tests: 0 of 0 logged branches in the coverage data
+    """)
+
+
 def test_to_unrun_listing_gives_a_line_for_each_logged_branch_whose_log_calls_never_ran():
     source = dedent("""
         import logging
@@ -288,6 +315,24 @@ def test_to_unrun_listing_leaves_out_a_branch_where_any_of_its_log_calls_ran():
     """)
     module = Path("app/service.py")
     executed = {module.resolve(): frozenset({5, 6, 7, 8, 10})}
+
+    listing = to_unrun_listing({module: measure_source(source)}, executed)
+
+    assert listing == ""
+
+
+def test_to_unrun_listing_leaves_out_a_branch_accepted_for_brl002():
+    source = dedent("""
+        import logging
+
+        def load(path):
+            try:
+                return read(path)
+            except OSError:  # noqa: BRL002
+                logging.exception("cannot read %s", path)
+    """)
+    module = Path("app/service.py")
+    executed = {module.resolve(): frozenset({5, 6})}
 
     listing = to_unrun_listing({module: measure_source(source)}, executed)
 

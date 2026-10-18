@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
-from birling.analysis import Branch, Unit, collect_units
+from birling.analysis import Branch, FindingKind, Unit, collect_units
 from birling.config import Config
 
 
@@ -229,7 +229,7 @@ def _should_log(branch: Branch, config: Config) -> bool:
 
     It should when its kind is configured, unless it raises on every path, which leaves the
     logging to whatever handles the exception, or it is accepted without a log: by a
-    `# birling: ignore` comment, or by catching only exceptions that never need one.
+    `# noqa: BRL001` comment, or by catching only exceptions that never need one.
 
     Args:
         branch: The branch.
@@ -238,7 +238,9 @@ def _should_log(branch: Branch, config: Config) -> bool:
     Returns:
         Whether the branch should log.
     """
-    if branch.kind not in config.branches or branch.always_raises or branch.has_ignore_comment:
+    if branch.kind not in config.branches or branch.always_raises:
+        return False
+    if FindingKind.UNLOGGED in branch.ignored:
         return False
     ignored = {name.rpartition(".")[2] for name in config.ignore_exceptions}
     caught = {name.rpartition(".")[2] for name in branch.exceptions}
