@@ -27,11 +27,24 @@ A log call in a statement nested in a branch belongs to that branch, and to any 
 
 ## Which branches should log
 
-A branch should log when its kind is one of those configured in `branches`, which is only `except` by default, unless it ends by raising. A handler that raises leaves the logging to whatever handles the exception; a handler that returns, continues, breaks or carries on swallows it, and without a log nobody hears about it.
+A branch should log when its kind is one of those configured in `branches`, which is only `except` by default, unless it ends by raising. A handler that raises passes the exception on, and leaves the logging to whatever handles it further up. A handler that returns, continues, breaks or just ends swallows the exception: it stops there, and without a log nobody hears about it.
 
-A branch counts as raising only when every path through it raises. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, should log: on the path that returns, the exception is swallowed. A way out of a branch is a `return`, or a `break` or `continue` that leaves the loop around it; an `if` with an `else`, a `try` or a `match` raises when all of its paths do.
+A branch counts as raising only when every path through it raises. A handler that raises on one path and returns on another, as in `if error.args: raise` followed by `return None`, should log: on the path that returns, the exception is swallowed. A `return` is a way out of a branch, and so is a `break` or `continue` that leaves the loop around it. An `if` with an `else`, a `try` or a `match` raises when all of its paths do.
 
-A call to a function that always raises counts as raising, awaited or not, and returned or not, as `sys.exit()` does by raising `SystemExit`. These functions are named in [`raising-functions`](configuration.md#what-should-log), by default `sys.exit`, the built-ins `exit` and `quit`, and `assert_never` from `typing` or `typing_extensions`. A call is matched by what its name refers to where it is made, as Python resolves it: `exit()` after `from sys import exit` counts, while `quit()` after `from pygame import quit` does not, and neither does a call to a parameter or a function of the module's own that is named `quit`. A name imported from one of two places, as with a fallback import, counts when both places are named. A method of an object, such as `parser.exit()`, does not count, since the name alone cannot tell which object it is called on. A call that ends the process at once, such as `os._exit()`, does not count either: an exception carries on up the stack, where code can catch it and log, while `os._exit()` leaves nothing the chance.
+### Functions that always raise
+
+A call to a function that always raises counts as raising, the way `sys.exit()` raises `SystemExit`. It counts whether it is awaited or returned, as in `return assert_never(value)`.
+
+These functions are listed in [`raising-functions`](configuration.md#what-should-log). By default they are `sys.exit`, the built-ins `exit` and `quit`, and `assert_never` from `typing` or `typing_extensions`.
+
+A call is matched by what its name refers to where the call is made, the way Python looks the name up:
+
+- `exit()` after `from sys import exit` counts, and so does `system.exit()` after `import sys as system`.
+- `quit()` after `from pygame import quit` does not count, and neither does a call to a parameter or a function of the module's own that is named `quit`.
+- A name imported from one of two places, as in a fallback import for older Pythons, counts only when both places are listed.
+- A method of an object, such as `parser.exit()`, does not count: the name alone cannot tell which kind of object it is called on.
+
+A call that ends the process at once, such as `os._exit()`, does not count. An exception passes up the stack, where other code can catch and log it; `os._exit()` stops the process before any code gets that chance.
 
 ## Accepting a branch without a log
 
@@ -82,6 +95,11 @@ What counts as a logger is set in the [configuration](configuration.md#what-coun
 
 ## Limitations
 
-- A logger reached through an index or a call, as in `loggers["audit"].info(...)`, is not recognised.
+Known gaps, with the issue that tracks each one where it can be fixed:
+
+- A logger reached through an index or a call, as in `loggers["audit"].info(...)`, is not recognised ([#5](https://github.com/berislavlopac/birling/issues/5)).
+- Code in a class body, outside its methods, is not measured ([#6](https://github.com/berislavlopac/birling/issues/6)).
+- A method that always raises, such as `ArgumentParser.error()`, does not count as raising ([#7](https://github.com/berislavlopac/birling/issues/7)).
+- A name assigned under `global` or `nonlocal` in one function is not seen as changed in the others, so a replaced raising function can still count as raising ([#8](https://github.com/berislavlopac/birling/issues/8)).
+- An exception swallowed by a context manager, such as `contextlib.suppress`, has no branch in the code and so cannot be measured ([#2](https://github.com/berislavlopac/birling/issues/2)).
 - A branch whose only statement is `...` or a docstring leaves nothing for [coverage.py](https://coverage.readthedocs.io/) to record, so it is never marked as having run.
-- An exception swallowed by a context manager, such as `contextlib.suppress`, has no branch in the code and so cannot be measured.

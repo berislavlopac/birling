@@ -17,7 +17,7 @@ An unknown key or a value of the wrong type stops the command with exit status 2
 |---|---|---|
 | `branches` | `["except"]` | The kinds of branch that should log, unless they end by raising: any of `except`, `if`, `else`, `case`, `try-else` and `loop-else`. See [How it works](how-it-works.md#branches). Replaces the default. |
 | `ignore-exceptions` | none | Exception types that never need a log, such as `["KeyError", "StopIteration"]`. A handler that catches only these need not log. Names are matched by their last part, so `KeyError` also matches `builtins.KeyError`. See [How it works](how-it-works.md#accepting-a-branch-without-a-log). |
-| `raising-functions` | `sys.exit`, `exit`, `quit`, `typing.assert_never`, `typing_extensions.assert_never` | Functions that always raise, such as `["sys.exit", "flask.abort"]`. A branch that ends in a call to one counts as raising, so it need not log. A function imported from a module is named with its module and found through the imports, so `sys.exit` also covers `from sys import exit`; a plain name is a built-in. Methods of objects are not matched. See [How it works](how-it-works.md#which-branches-should-log). Replaces the default. |
+| `raising-functions` | `sys.exit`, `exit`, `quit`, `typing.assert_never`, `typing_extensions.assert_never` | Functions that always raise, named with their module, such as `["sys.exit", "flask.abort"]`; a plain name is a built-in. A branch that ends in a call to one counts as raising, so it need not log. See [Functions that always raise](how-it-works.md#functions-that-always-raise). Replaces the default. |
 | `module-level` | `false` | Whether a module's own code, outside its functions and classes, is measured as a unit named `<module>`. Off by default, because the usual handler at module level is an optional import, such as `except ImportError:`. |
 | `lambdas` | `false` | Whether a log call in a lambda counts for the code the lambda is written in. Off by default, because a lambda's body runs when the lambda is called, not where it is written. |
 | `fail-under` | `0` | The lowest acceptable score, from 0 to 100. Below it, the command exits with status 1. |
@@ -34,7 +34,7 @@ These keys describe the logging libraries a project uses. The values given add t
 | `logger-objects` | none | Loggers imported from a module, each written as `module.name`, such as `loguru.logger`. |
 | `binding-methods` | `bind`, `new`, `opt` | Methods that return a logger derived from the one they are called on, as in `log.bind(user=user).info(...)`. |
 | `helpers` | none | The project's own functions that log, each with the level it logs at, such as `{ log_failure = "error" }`. A call to a function or method of that name is a log call. |
-| `name-fallback` | `true` | Whether a receiver named like a logger is taken for one: `log`, `logger`, or a name ending in `_log` or `_logger`, in any case. |
+| `name-fallback` | `true` | Whether the object a method is called on is taken for a logger when its name reads like one: `log`, `logger`, or a name ending in `_log` or `_logger`, in any case. |
 
 A `log` method or function is recognised as well, taking its level from its first argument, as in `log.log(logging.WARNING, ...)`.
 

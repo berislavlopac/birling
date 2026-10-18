@@ -1,6 +1,6 @@
 # birling
 
-birling measures log coverage in Python projects: how well the code is covered by log calls, whether through the standard [`logging`](https://docs.python.org/3/library/logging.html) module, [structlog](https://www.structlog.org/), [loguru](https://github.com/Delgan/loguru) or a project's own helpers, the way [coverage.py](https://coverage.readthedocs.io/) measures how well it is covered by tests.
+birling measures log coverage in Python projects: how well the code is covered by log calls, the way [coverage.py](https://coverage.readthedocs.io/) measures how well it is covered by tests. It recognises the standard [`logging`](https://docs.python.org/3/library/logging.html) module, [structlog](https://www.structlog.org/) and [loguru](https://github.com/Delgan/loguru), and a project's own logging helpers.
 
 A handled exception that leaves no log is a failure nobody hears about. birling finds the places in the code where something should be logged, checks whether a log call is there, and gives the project a score that a CI run can hold to a minimum. By default, those places are `except` handlers that do not raise again.
 
@@ -39,9 +39,11 @@ fail-under = 80
 
 The standard `logging` module needs no configuration; other logging libraries and a project's own logging helpers are described in the table.
 
+`--show-unlogged` lists each unlogged branch as `path:line`, and a `# noqa: BRL001` comment on its `except` line accepts a branch that rightly does not log.
+
 ## Documentation
 
-The documentation covers the command, the configuration, how branches and log calls are found, and the Python interface. It is in `docs/`; `just docs` serves it locally.
+The documentation is at [birling.readthedocs.io](https://birling.readthedocs.io): the command, the configuration, how branches and log calls are found, and the Python interface.
 
 ## The name
 

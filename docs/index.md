@@ -1,10 +1,10 @@
 # birling
 
-birling measures log coverage in Python projects: how well the code is covered by log calls, whether through the standard [`logging`](https://docs.python.org/3/library/logging.html) module, [structlog](https://www.structlog.org/), [loguru](https://github.com/Delgan/loguru) or a project's own helpers, the way [coverage.py](https://coverage.readthedocs.io/) measures how well it is covered by tests.
+birling measures log coverage in Python projects: how well the code is covered by log calls, the way [coverage.py](https://coverage.readthedocs.io/) measures how well it is covered by tests. It recognises the standard [`logging`](https://docs.python.org/3/library/logging.html) module, [structlog](https://www.structlog.org/) and [loguru](https://github.com/Delgan/loguru), and a project's own logging helpers.
 
 A handled exception that leaves no log is a failure nobody hears about. birling finds the places in the code where something should be logged, checks whether a log call is there, and gives the project a score that a CI run can hold to a minimum.
 
-By default, the places that should log are `except` handlers that do not raise again. Other kinds of branch, such as `if` and `else`, can be added in the configuration.
+The places it looks at are branches: the alternative paths through a function, such as an `except` handler or the body of an `if`. By default, the branches that should log are `except` handlers that do not raise again; other kinds of branch can be added in the configuration.
 
 ## Installation
 
@@ -35,6 +35,17 @@ TOTAL                    4       2    50%
 ```
 
 Each row is a module with branches that should log. **Branches** counts them, **Logged** counts those that hold a log call, and **Unlogged** lists the lines of those that do not.
+
+To list each unlogged branch on a line of its own, which editors and CI logs turn into a link, add `--show-unlogged`:
+
+```shell
+$ birling shop --show-unlogged
+...
+shop/orders.py:12: BRL001 no log call: load_order: except TimeoutError
+shop/payments.py:12: BRL001 no log call: charge: except ValueError
+```
+
+A branch that rightly does not log, such as `except KeyError: return default`, is accepted with a `# noqa: BRL001` comment on its `except` line, and drops out of the count.
 
 To fail a CI run below a score, set a minimum in `pyproject.toml`:
 
