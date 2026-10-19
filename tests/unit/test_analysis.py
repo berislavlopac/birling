@@ -302,6 +302,55 @@ def test_a_name_is_resolved_in_the_scope_that_calls_it():
     }
 
 
+def test_a_name_assigned_under_global_or_nonlocal_hides_a_raising_function_where_it_is_visible():
+    """A `global` assignment rebinds the name in the module, a `nonlocal` one in its function."""
+    source = dedent("""
+        from sys import exit
+        from typing import assert_never
+
+        def install(handler):
+            global exit
+            exit = handler
+
+        def run():
+            try:
+                work()
+            except OSError:
+                exit(1)
+
+        def outer():
+            from typing import assert_never
+
+            def replace_local(handler):
+                nonlocal assert_never
+                assert_never = handler
+
+            def check(value):
+                try:
+                    work(value)
+                except ValueError:
+                    assert_never(value)
+
+        def unaffected(value):
+            global assert_never
+            try:
+                work(value)
+            except ValueError:
+                assert_never(value)
+    """)
+
+    units = collect_units(source, Config())
+
+    assert {unit.name: [b.always_raises for b in unit.branches] for unit in units} == {
+        "install": [],
+        "run": [False],
+        "outer": [],
+        "outer.replace_local": [],
+        "outer.check": [False],
+        "unaffected": [True],
+    }
+
+
 @pytest.mark.parametrize(
     "imports",
     [

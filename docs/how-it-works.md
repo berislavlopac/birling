@@ -100,6 +100,5 @@ Known gaps, with the issue that tracks each one where it can be fixed:
 - A logger reached through an index or a call, as in `loggers["audit"].info(...)`, is not recognised ([#5](https://github.com/berislavlopac/birling/issues/5)).
 - Code in a class body, outside its methods, is not measured ([#6](https://github.com/berislavlopac/birling/issues/6)).
 - A method that always raises, such as `ArgumentParser.error()`, does not count as raising ([#7](https://github.com/berislavlopac/birling/issues/7)).
-- A name assigned under `global` or `nonlocal` in one function is not seen as changed in the others, so a replaced raising function can still count as raising ([#8](https://github.com/berislavlopac/birling/issues/8)).
 - An exception swallowed by a context manager, such as `contextlib.suppress`, has no branch in the code and so cannot be measured ([#2](https://github.com/berislavlopac/birling/issues/2)).
 - A branch whose only statement is `...` or a docstring leaves nothing for [coverage.py](https://coverage.readthedocs.io/) to record, so it is never marked as having run.

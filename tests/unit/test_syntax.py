@@ -165,6 +165,44 @@ def test_find_bindings_gives_each_name_a_scope_binds_with_what_imports_bind_it_t
     }
 
 
+def test_find_bindings_includes_names_bound_under_global_or_nonlocal_in_nested_scopes():
+    """A nested function binds a `global` name in the module and a `nonlocal` one around it."""
+    module = ast.parse(
+        dedent("""
+            from sys import exit, quit
+
+            def outer():
+                from typing import assert_never
+
+                def middle():
+                    class Helper:
+                        def rebind():
+                            global exit
+                            nonlocal assert_never
+                            exit = None
+                            assert_never = None
+
+                def keep():
+                    global quit
+        """)
+    )
+    [_, outer] = module.body
+
+    module_bindings = find_bindings(walk_scope(module.body))
+    outer_bindings = find_bindings(walk_scope([outer.args, *outer.body]))
+
+    assert module_bindings == {
+        "exit": None,
+        "quit": frozenset({"sys.quit"}),
+        "outer": None,
+    }
+    assert outer_bindings == {
+        "assert_never": None,
+        "middle": None,
+        "keep": None,
+    }
+
+
 def test_parse_returns_the_syntax_tree_without_showing_warnings():
     """A warning such as an invalid escape is for the parsed code's own tools."""
     source = 'pattern = "\\d+"\n'
