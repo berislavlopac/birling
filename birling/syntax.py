@@ -50,13 +50,17 @@ def to_dotted_name(node: ast.AST) -> str | None:
     return None
 
 
+_Definition = ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef
+
+
 def find_bindings(nodes: Iterable[ast.AST]) -> dict[str, frozenset[str] | None]:
     """Return the names that the nodes of one scope bind, with what imports bind them to.
 
     Every way of binding a name counts: parameters, assignment targets, `def` and `class`,
-    imports, `except ... as` and the captures of a `match` pattern. The variables of a
-    comprehension's `for` belong to the comprehension, so they are left out, and so are the
-    names of a `*` import, which cannot be told from the source.
+    imports, `except ... as`, the captures of a `match` pattern, and names bound under
+    `global` or `nonlocal` in nested functions. The variables of a comprehension's `for`
+    belong to the comprehension, so they are left out, and so are the names of a `*` import,
+    which cannot be told from the source.
 
     Args:
         nodes: The scope's own nodes, in the order `walk_scope()` yields them; a function's
@@ -67,17 +71,74 @@ def find_bindings(nodes: Iterable[ast.AST]) -> dict[str, frozenset[str] | None]:
         `sys.exit` for `from sys import exit`; `None` when anything else binds it, or an
         import whose target cannot be told.
     """
+    scope_nodes = list(nodes)
     found: dict[str, set[str] | None] = {}
-    for name, target in _find_each_binding(nodes):
+    for name, target in _find_each_binding(scope_nodes):
         targets = found.get(name, set())
         found[name] = None if targets is None or target is None else targets | {target}
+    for name in _find_rebound_in_scope(scope_nodes):
+        found[name] = None
     return {
         name: None if targets is None else frozenset(targets) for name, targets in found.items()
     }
 
 
+def _find_rebound_in_scope(nodes: list[ast.AST]) -> set[str]:
+    """Return the names that nested scopes rebind in this scope through `global` or `nonlocal`.
+
+    Args:
+        nodes: The scope's own nodes.
+
+    Returns:
+        The names rebound in this scope.
+    """
+    is_function = any(isinstance(node, ast.arguments) for node in nodes)
+    rebound: set[str] = set()
+    for node in nodes:
+        if isinstance(node, _Definition):
+            global_names, nonlocal_names = _find_rebound(node)
+            rebound |= nonlocal_names if is_function else global_names
+    return rebound
+
+
+def _find_rebound(scope: _Definition) -> tuple[set[str], set[str]]:
+    """Return the names that a nested scope and its descendants rebind outside it.
+
+    Args:
+        scope: The nested function or class.
+
+    Returns:
+        The names rebound under `global` and under `nonlocal`.
+    """
+    body: list[ast.AST] = (
+        [*scope.body] if isinstance(scope, ast.ClassDef) else [scope.args, *scope.body]
+    )
+    nodes = list(walk_scope(body))
+    declared_global = {
+        name for node in nodes if isinstance(node, ast.Global) for name in node.names
+    }
+    declared_nonlocal = {
+        name for node in nodes if isinstance(node, ast.Nonlocal) for name in node.names
+    }
+    direct_bound = {name for name, _ in _find_each_binding(nodes)}
+    global_names = direct_bound & declared_global
+    nonlocal_names = direct_bound & declared_nonlocal
+    child_nonlocals: set[str] = set()
+    for node in nodes:
+        if isinstance(node, _Definition):
+            child_global, child_nonlocal = _find_rebound(node)
+            global_names |= child_global
+            child_nonlocals |= child_nonlocal
+    if isinstance(scope, ast.ClassDef):
+        nonlocal_names |= child_nonlocals
+    else:
+        local_bound = direct_bound - declared_global - declared_nonlocal
+        nonlocal_names |= child_nonlocals - local_bound
+    return global_names, nonlocal_names
+
+
 def _find_each_binding(nodes: Iterable[ast.AST]) -> Iterator[tuple[str, str | None]]:
-    """Yield each binding of a name among the nodes, in their order.
+    """Yield each direct binding of a name among the nodes, in their order.
 
     A comprehension comes before the variables of its `for`, which are skipped.
 
